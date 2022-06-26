@@ -25,3 +25,5 @@ Commands implemented -
 - So if you have give timeout for nested, give it to outer, and set it higher so that at each successive state has enough time to get completed and it does not run infinitely.
 
 - map_to_parent important for nested otherwise the command won't run the second time
+
+text from damini
