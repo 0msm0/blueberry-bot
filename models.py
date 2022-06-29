@@ -90,3 +90,33 @@ class Wakesleep(Base):
 
     def __repr__(self):
         return f"Wakesleep :- id - {self.id}, user_id - {self.user_id}, sleeptime - {self.sleeptime}, wakeuptime - {self.wakeuptime}, notes - {self.notes}, created_at - {self.created_at}"
+
+
+
+class Food(Base):
+    __tablename__ = 'food'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    food_item = Column(Text, nullable = False)
+    food_label = Column(Text, nullable = False)
+    food_time = Column(DateTime, nullable=False)
+    photos = Column(Text, nullable=True)
+    food_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_food_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_food_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_food_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Food :- id - {self.id}, user_id - {self.user_id}, food_time - {self.food_time}, photos - {self.photos},food_notes - {self.food_notes}, created_at - {self.created_at}"

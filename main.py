@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta
 from constants import *
-from models import User, Timezone, Wakesleep
+from models import User, Timezone, Wakesleep, Food
 from dbhelper import Session, engine
 import logging
 load_dotenv()
@@ -12,6 +12,8 @@ from modules.registration import registration_handler
 from modules.timezone import set_timezone_handler, mytimezones
 from modules.wakesleep import wakesleep_handler, mywakesleeps
 from modules.getcurrentuser import get_current_user
+from modules.food import food, food_handler, donephotos
+
 
 log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -458,11 +460,13 @@ if __name__ == '__main__':
     User.__table__.create(engine, checkfirst=True)
     Timezone.__table__.create(engine, checkfirst=True)
     Wakesleep.__table__.create(engine, checkfirst=True)
+    Food.__table__.create(engine, checkfirst=True)
     updater = Updater(token=token, use_context=True)
     dp: Dispatcher = updater.dispatcher
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('mytimezones', mytimezones))
     dp.add_handler(CommandHandler('mywakesleeps', mywakesleeps))
+   
     # dp.add_handler(MessageHandler(Filters.text, test))
     # dp.add_handler(CommandHandler('wakeup', wakeup))
     # dp.add_handler(CommandHandler('sleep', sleep))
@@ -518,6 +522,7 @@ if __name__ == '__main__':
     dp.add_handler(registration_handler)
     dp.add_handler(set_timezone_handler)
     dp.add_handler(wakesleep_handler)
+    dp.add_handler(food_handler)
     dp.add_error_handler(error_callback)
 
     updater.start_polling()
