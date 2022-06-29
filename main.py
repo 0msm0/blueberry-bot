@@ -526,4 +526,5 @@ if __name__ == '__main__':
     dp.add_error_handler(error_callback)
 
     updater.start_polling()
+    # testing
     updater.idle()
