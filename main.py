@@ -525,6 +525,20 @@ if __name__ == '__main__':
     dp.add_handler(food_handler)
     dp.add_error_handler(error_callback)
 
-    updater.start_polling()
-    # testing
-    updater.idle()
+
+
+    tg_mode = os.environ.get("TG_MODE", "polling")
+
+    if tg_mode == 'webhook':
+        ssl_cert_file_loc = os.environ.get("ssl_cert_file_loc", 'error')
+        # SSL_CERT = 'certi/ssl-limabot.pem' # we'll create folder on server and ssl certificate on server itself. no need to create it here. but better to mention here.
+        live_server_url = os.environ.get("LIVE_SERVER_URL", "0.0.0.0")  # reqd format https://11.11.11.11:443  (no trailing slash) (should be 443 and not 8443)
+        logger.info('inside WEBHOOK block')
+        updater.start_webhook(listen="0.0.0.0", port=8443, url_path=f"{token}", webhook_url=f"{live_server_url}/{token}", cert=ssl_cert_file_loc)
+        logger.info(updater.bot.get_webhook_info())
+        updater.idle()
+    else:
+        logger.info('inside POLLING block')
+        updater.start_polling()
+        updater.idle()
+

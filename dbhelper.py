@@ -12,8 +12,8 @@ db_name = os.environ.get('db_name')
 db_port = os.environ.get('db_port')
 db_url = f"mysql://{db_user}:{db_password}@{db_host}/{db_name}"
 
-mode = os.environ.get("MODE", "polling")
-if mode == 'webhook':
+db_mode = os.environ.get("DB_MODE", "polling")
+if db_mode == 'webhook':
     db_url = f"mysql://{db_user}:{db_password}@{db_host}/{db_name}"
     engine = create_engine(f"{db_url}", pool_recycle=60)
 else:
