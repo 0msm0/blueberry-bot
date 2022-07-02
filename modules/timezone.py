@@ -158,6 +158,7 @@ def save_timezone_records(update:Update, context: CallbackContext):
                                           f"Tz name: {mytimezone.timezone_name}\n"
                                           f"Tz offset: {mytimezone.timezone_offset}\n"
                                           f"Tz effective from:  {mytimezone.effective_from}")
+                update.effective_message.reply_text("Cool, you are all set! Use /wakesleep /food to get started!\nUse / to populate list of commands.")
                 clear_userdata(context=context)
 
 
