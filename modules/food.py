@@ -117,7 +117,12 @@ def food(update, context):
                 keyboard = generate_date_keyboard()
                 update.message.reply_text("Let's start. (use /cancelfood if you want to cancel)")
                 update.message.reply_text("Date of food?", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+                query_message_id = update.message.message_id + 1
+                chat_data = context.chat_data
+                chat_data['message_id_of_letsstart'] = query_message_id
                 return FOODDATE
+    # query_message_id = update.message.message_id
+    # context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id = query_message_id)
 
 
 def selected_food_date(update: Update, context):
@@ -184,9 +189,14 @@ def food_name(update, context):
 def doneitems(update, context):
     chat_data = context.chat_data
     if not chat_data.get('food_item'):
-        chat_data['foodname'] = None
+        len_of_food_items = 0
+        update.message.reply_text("Atleast one item is needed, use /doneitems once done")
+        return FOODNAME
     else:
-        chat_data['foodname'] = ',,,'.join(chat_data['food_item'])  # need to handle this in database sparate table
+        len_of_food_items = len(chat_data['food_item'])
+
+    message_id_of_doneitems = update.message.message_id - len_of_food_items -1
+    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_doneitems)
     update.message.reply_text("Write notes below (else click /skip_notes")
     return FOOD_NOTE
 
@@ -198,8 +208,8 @@ def food_notes(update, context):
     chat_data = context.chat_data
     ans = update.effective_message.text
     chat_data['food_notes'] = ans
-    update.message.reply_text("Notes added successfully.")
-    update.message.reply_text("Add photo. Once photo done use  /donephotos")
+    # update.message.reply_text("Notes added successfully.")
+    update.message.reply_text("Upload photos if any, else click /donephotos")
     # save_food_record(update, context)
     return PHOTO_UPLOAD
 
@@ -283,9 +293,15 @@ def donephotos(update, context):
     logger.info('inside donephoto')
     chat_data = context.chat_data
     if not chat_data.get('food_photo_temp'):
+        len_of_food_photos = 0
         chat_data['food_photos'] = None
     else:
+        len_of_food_photos = len(chat_data['food_photos'])
         chat_data['food_photos'] = ',,,'.join(chat_data['food_photo_temp'])
+
+    message_id_of_doneitems = update.message.message_id - len_of_food_photos -1
+    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_doneitems)
+
     keyboard = generate_label_keyboard()
     update.message.reply_text("Select food label", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
     return FOODLABEL
@@ -297,7 +313,11 @@ def selected_label(update: Update, context):
     update.callback_query.answer()
     chat_data = context.chat_data
     chat_data['food_label'] = query.data
-    query.edit_message_text(text=f"Label recieved = {chat_data['food_label']}")
+    query_message_id = update.callback_query.message.message_id
+    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id = query_message_id)
+
+    # query.edit_message_text(text=f"Label recieved = {chat_data['food_label']}")
+
     # data = f"date={chat_data['food_time']}\n" \
     #        f"items={chat_data['food_item']}\n" \
     #        f"notes={chat_data['food_notes']}\n" \
@@ -335,11 +355,18 @@ def save_food_record(update, context):
             else:
                 session.commit()
                 logger.info(f"Food record added - {food_record}")
-                update.effective_message.reply_text(f"Record added-> \n\n"
-                                                    f"<b>Food taken at:</b> {food_record.food_time}\n"
+                update.effective_message.reply_text(f"Record added - \n\n"
+                                                    f"<b>Food taken at:</b> {readable_datetime(food_record.food_time)}\n"
                                                     f"<b>Food items:</b> {food_record.food_item}\n"
-                                                    f"<b>Notes:</b>  {food_record.food_notes}", parse_mode='HTML')
-                clear_chatdata(context=context)
+                                                    f"<b>Food label:</b> {food_record.food_label}\n"
+                                                    f"<b>Notes:</b>  {food_record.food_notes if food_record.food_notes else '-'}", parse_mode='HTML')
+                try:
+                    message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
+                    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
+                except:
+                    clear_chatdata(context=context)
+                    logger.exception("error converting chat_data['message_id_of_letsstart'] to int")
+            clear_chatdata(context=context)
 
 
 def cancelfood(update, context):
