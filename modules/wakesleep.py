@@ -88,7 +88,8 @@ def wakesleep(update, context):
         if user:
             if user.timezones.count():
                 keyboard = generate_date_keyboard()
-                update.message.reply_text("Date of sleep? (/cancel_wakesleep to cancel)", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+                update.message.reply_text("Adding sleep, wakeup details..\n(use /cancel_wakesleep to cancel)")
+                update.message.reply_text("Date of sleep?", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
                 return SLEEPDATE
             else:
                 update.message.reply_text("You need to /set_timezone first")
@@ -283,7 +284,7 @@ def save_wakesleep_record(update, context):
                 update.effective_message.reply_text(f"Record added-> \n\n"
                                           f"<b>Slept at:</b> {wakesleep_record.sleeptime}\n"
                                           f"<b>Wokeup at:</b> {wakesleep_record.wakeuptime}\n"
-                                          f"<b>Notes:</b>  {wakesleep_record.notes}", parse_mode='HTML')
+                                          f"<b>Notes:</b>  {wakesleep_record.notes if wakesleep_record.notes else '-'}", parse_mode='HTML')
                 clear_chatdata(context=context)
 
 
@@ -305,7 +306,7 @@ def mywakesleeps(update, context):
             if user.wakesleeps.count():
                 for _id, item in enumerate(user.wakesleeps.order_by(desc('wakeuptime')).all()):
                     if _id < 5:
-                        update.effective_message.reply_text(f"{_id}. {item.id} {readable_datetime(item.sleeptime)} - {readable_datetime(item.wakeuptime)}")
+                        update.effective_message.reply_text(f"{readable_datetime(item.sleeptime)} - {readable_datetime(item.wakeuptime)}")
                 # update.effective_message.reply_text([(str(item.sleeptime), str(item.wakeuptime), item.notes) for item in user.wakesleeps.all()])
             else:
                 update.effective_message.reply_text("You haven't added a single sleep record. Use /wakesleep to get started")
