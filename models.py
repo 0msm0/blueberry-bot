@@ -16,6 +16,7 @@ class User(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
     timezones = relationship("Timezone", back_populates='users', lazy='dynamic')
     wakesleeps = relationship("Wakesleep", back_populates='users', lazy='dynamic')
+    foods = relationship("Food", back_populates='users', lazy='dynamic')
     # records = relationship("Record", back_populates='users', lazy='dynamic')
     # bookmarks = relationship("Bookmark", back_populates='users', lazy='dynamic')
 
@@ -90,3 +91,32 @@ class Wakesleep(Base):
 
     def __repr__(self):
         return f"Wakesleep :- id - {self.id}, user_id - {self.user_id}, sleeptime - {self.sleeptime}, wakeuptime - {self.wakeuptime}, notes - {self.notes}, created_at - {self.created_at}"
+
+
+class Food(Base):
+    __tablename__ = 'foods'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    food_item = Column(Text, nullable = False)
+    food_label = Column(Text, nullable = False)
+    food_time = Column(DateTime, nullable=False)
+    food_photos = Column(Text, nullable=True)
+    food_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_food_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_food_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_food_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Food :- id - {self.id}, user_id - {self.user_id}, food_time - {self.food_time}, food items - {', '.join(self.food_item)}, food photos - {self.food_photos},food_notes - {self.food_notes}, created_at - {self.created_at}"
