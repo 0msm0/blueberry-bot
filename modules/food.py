@@ -393,6 +393,7 @@ def myfood(update, context):
                 for _id, item in enumerate(user.foods.order_by(desc('food_time')).all()):
                     if _id < 5:
                         update.effective_message.reply_text(f"{_id}. {item.id} {readable_datetime(item.food_time)} - {item.food_item.replace(',,,', ', ')}")
+                        update.effective_message.reply_photo(photo=open(f"{item.food_photos}", 'rb'))
                 # update.effective_message.reply_text([(str(item.sleeptime), str(item.wakeuptime), item.notes) for item in user.wakesleeps.all()])
             else:
                 update.effective_message.reply_text("You haven't added a single sleep record. Use /food to get started")

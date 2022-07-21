@@ -362,8 +362,6 @@ def save_gym_record(update, context):
             weight = chat_data['weight']
             weight = ", ".join(weight)
             gym_notes = chat_data['gym_notes']
-
-            #print(user.id, gym_datetime, gym_type, total_set, repetition, weight, gym_notes)
             gym_record: Gym = Gym(user_id=user.id, gym_datetime=gym_datetime, gym_type=gym_type,
                                      total_set=total_set, repetition=repetition, weight=weight, gym_notes=gym_notes, created_at=datetime.now())
             try:
@@ -393,10 +391,8 @@ def save_gym_record(update, context):
             clear_chatdata(context=context)
 
 def get_reps_and_weights_in_format(reps, weights):
-    print(type(reps), type(weights))
     reps = reps.split(', ')
     weights = weights.split(', ')
-    print(reps, weights)
     if isinstance(reps, list):
         temp = ''
         for rep, weight in zip(reps, weights):
