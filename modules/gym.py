@@ -383,6 +383,7 @@ def save_gym_record(update, context):
                                                     f"<b>Reps:</b> {gym_record.repetition}\n"
                                                     f"<b>Weight:</b> {gym_record.weight}\n"
                                                     f"<b>Notes:</b>  {gym_record.gym_notes if gym_record.gym_notes else '-'}", parse_mode='HTML')
+                update.effective_message.reply_text(f"Use /mygym to check previous records")
                 try:
                     message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
                     context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)

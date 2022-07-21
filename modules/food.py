@@ -360,6 +360,7 @@ def save_food_record(update, context):
                                                     f"<b>Food items:</b> {food_record.food_item}\n"
                                                     f"<b>Food label:</b> {food_record.food_label}\n"
                                                     f"<b>Notes:</b>  {food_record.food_notes if food_record.food_notes else '-'}", parse_mode='HTML')
+                update.effective_message.reply_text(f"Use /myfood to check previous records")
                 try:
                     message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
                     context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)

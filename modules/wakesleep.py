@@ -285,6 +285,7 @@ def save_wakesleep_record(update, context):
                                           f"<b>Slept at:</b> {wakesleep_record.sleeptime}\n"
                                           f"<b>Wokeup at:</b> {wakesleep_record.wakeuptime}\n"
                                           f"<b>Notes:</b>  {wakesleep_record.notes if wakesleep_record.notes else '-'}", parse_mode='HTML')
+                update.effective_message.reply_text(f"Use /mywakesleep to check previous records")
                 clear_chatdata(context=context)
 
 

@@ -301,6 +301,7 @@ def save_pranayam_record(update, context):
                                                     f"<b>Type:</b> {pranayam_record.pranayam_type}\n"
                                                     f"<b>Reps:</b> {pranayam_record.repetition}\n"
                                                     f"<b>Notes:</b>  {pranayam_record.pranayam_notes if pranayam_record.pranayam_notes else '-'}", parse_mode='HTML')
+                update.effective_message.reply_text(f"Use /mypranayam to check previous records")
                 try:
                     message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
                     context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
