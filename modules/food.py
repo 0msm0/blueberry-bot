@@ -383,7 +383,7 @@ def readable_datetime(inputdatetime: datetime):
     return inputdatetime.strftime('%d %b, %H:%M')
 
 
-def myfoods(update, context):
+def myfood(update, context):
     with Session() as session:
         chat_id = update.effective_message.chat_id
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
@@ -394,7 +394,7 @@ def myfoods(update, context):
                         update.effective_message.reply_text(f"{_id}. {item.id} {readable_datetime(item.food_time)} - {item.food_item.replace(',,,', ', ')}")
                 # update.effective_message.reply_text([(str(item.sleeptime), str(item.wakeuptime), item.notes) for item in user.wakesleeps.all()])
             else:
-                update.effective_message.reply_text("You haven't added a single sleep record. Use /wakesleep to get started")
+                update.effective_message.reply_text("You haven't added a single sleep record. Use /food to get started")
 
 food_handler = ConversationHandler(
     entry_points=[CommandHandler('food', food)],

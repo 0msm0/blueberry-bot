@@ -17,6 +17,9 @@ class User(Base):
     timezones = relationship("Timezone", back_populates='users', lazy='dynamic')
     wakesleeps = relationship("Wakesleep", back_populates='users', lazy='dynamic')
     foods = relationship("Food", back_populates='users', lazy='dynamic')
+    gyms = relationship("Gym", back_populates='users', lazy='dynamic')
+    yogas = relationship("Yoga", back_populates='users', lazy='dynamic')
+    pranayams = relationship("Pranayam", back_populates='users', lazy='dynamic')
     # records = relationship("Record", back_populates='users', lazy='dynamic')
     # bookmarks = relationship("Bookmark", back_populates='users', lazy='dynamic')
 
@@ -120,3 +123,87 @@ class Food(Base):
 
     def __repr__(self):
         return f"Food :- id - {self.id}, user_id - {self.user_id}, food_time - {self.food_time}, food items - {', '.join(self.food_item)}, food photos - {self.food_photos},food_notes - {self.food_notes}, created_at - {self.created_at}"
+
+class Gym(Base):
+    __tablename__ = 'gyms'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    gym_datetime = Column(DateTime, nullable=False)
+    gym_type = Column(String(255), nullable=False)
+    total_set = Column(Integer, nullable=False)
+    repetition = Column(String(255), nullable=False)
+    weight = Column(String(255), nullable=False)
+    gym_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_gym_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_gym_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_gym_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Gym :- id - {self.id}, user_id - {self.user_id}, gym_datetime - {self.gym_datetime}, gym_type - {self.gym_type}, total_set - {self.total_set}, repetition - {self.repetition}, weight - {self.weight}, gym_notes - {self.gym_notes}, created_at - {self.created_at}"
+
+class Yoga(Base):
+    __tablename__ = 'yogas'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    yoga_type = Column(String(255), nullable=False)
+    yoga_datetime = Column(DateTime, nullable=False)
+    repetition = Column(Integer, nullable=False)
+    yoga_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_yoga_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_yoga_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_yoga_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Yoga :- id - {self.id}, user_id - {self.user_id}, yoga_type - {self.yoga_type}, yoga_datetime - {self.yoga_datetime}, repetition - {self.repetition}, yoga_notes - {self.yoga_notes}, created_at - {self.created_at}"
+
+class Pranayam(Base):
+    __tablename__ = 'pranayams'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    pranayam_type = Column(String(255), nullable=False)
+    pranayam_datetime = Column(DateTime, nullable=False)
+    repetition = Column(Integer, nullable=False)
+    pranayam_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_pranayam_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_pranayam_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_pranayam_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Pranayama :- id - {self.id}, user_id - {self.user_id}, pranayam_type - {self.pranayam_type}, pranayam_datetime - {self.pranayam_datetime}, repetition - {self.repetition}, pranayam_notes - {self.pranayam_notes}, created_at - {self.created_at}"
+

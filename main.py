@@ -2,13 +2,16 @@ from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackContext, C
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import load_dotenv
 import os
-from models import User, Timezone, Wakesleep, Food
+from models import User, Timezone, Wakesleep, Food, Gym, Yoga, Pranayam
 from dbhelper import Session, engine
 import logging
-from modules.food import food_handler, myfoods
+from modules.food import food_handler, myfood
 from modules.registration import registration_handler
-from modules.timezone import set_timezone_handler, mytimezones
-from modules.wakesleep import wakesleep_handler, mywakesleeps
+from modules.timezone import set_timezone_handler, mytimezone
+from modules.wakesleep import wakesleep_handler, mywakesleep
+from modules.gym import gym_handler, mygym
+from modules.yoga import yoga_handler, myyoga
+from modules.pranayam import pranayam_handler, mypranayam
 from modules.getcurrentuser import get_current_user
 
 load_dotenv()
@@ -46,17 +49,26 @@ if __name__ == '__main__':
     Timezone.__table__.create(engine, checkfirst=True)
     Wakesleep.__table__.create(engine, checkfirst=True)
     Food.__table__.create(engine, checkfirst=True)
+    Gym.__table__.create(engine, checkfirst=True)
+    Yoga.__table__.create(engine, checkfirst=True)
+    Pranayam.__table__.create(engine, checkfirst=True)
 
     updater = Updater(token=token, use_context=True)
     dp: Dispatcher = updater.dispatcher
     dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(CommandHandler('mytimezones', mytimezones))
-    dp.add_handler(CommandHandler('mywakesleeps', mywakesleeps))
-    dp.add_handler(CommandHandler('myfoods', myfoods))
+    dp.add_handler(CommandHandler('mytimezone', mytimezone))
+    dp.add_handler(CommandHandler('mywakesleep', mywakesleep))
+    dp.add_handler(CommandHandler('myfood', myfood))
+    dp.add_handler(CommandHandler('mygym', mygym))
+    dp.add_handler(CommandHandler('myyoga', myyoga))
+    dp.add_handler(CommandHandler('mypranayam', mypranayam))
     dp.add_handler(registration_handler)
     dp.add_handler(set_timezone_handler)
     dp.add_handler(wakesleep_handler)
     dp.add_handler(food_handler)
+    dp.add_handler(gym_handler)
+    dp.add_handler(yoga_handler)
+    dp.add_handler(pranayam_handler)
     dp.add_error_handler(error_callback)
 
     tg_mode = os.environ.get("TG_MODE", "polling")

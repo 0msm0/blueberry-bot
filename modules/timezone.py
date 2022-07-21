@@ -162,7 +162,7 @@ def save_timezone_records(update:Update, context: CallbackContext):
                 clear_userdata(context=context)
 
 
-def mytimezones(update, context):
+def mytimezone(update, context):
     with Session() as session:
         chat_id = update.effective_message.chat_id
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
