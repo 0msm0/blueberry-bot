@@ -296,7 +296,7 @@ def donephotos(update, context):
         len_of_food_photos = 0
         chat_data['food_photos'] = None
     else:
-        len_of_food_photos = len(chat_data['food_photos'])
+        len_of_food_photos = len(chat_data['food_photo_temp'])
         chat_data['food_photos'] = ',,,'.join(chat_data['food_photo_temp'])
 
     message_id_of_doneitems = update.message.message_id - len_of_food_photos -1
