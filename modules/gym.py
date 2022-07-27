@@ -22,24 +22,36 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 gym_timeout_time = 120
-
 GYM_DATE, GYM_HOUR, GYM_MINUTE, GYM_NAME, GYM_SET, GYM_WEIGHT, GYM_REPETITION, GYM_NOTE = range(8)
-
-
 minutes_list = [00, 10, 20, 30, 40, 50]
+gym_names = ['Biceps', 'Calf Raise', 'Chest', 'Deadlift', 'Planks', 'Pullups', 'Pushups', 'Shoulder', 'Shrugs', 'Squats', 'Triceps', 'Other']
 
-def generate_gym_keyboard():
-    keyboard = [[
-        InlineKeyboardButton("Chest", callback_data="chest"),
-        InlineKeyboardButton("Biceps", callback_data="biceps"),
-        InlineKeyboardButton("Shoulder", callback_data="shoulder"),
-    ],
-        [
-            InlineKeyboardButton("Legs", callback_data="legs"),
-            InlineKeyboardButton("Triceps", callback_data="triceps"),
-            InlineKeyboardButton("Other", callback_data="other"),
-        ]]
-    return keyboard
+def generate_gym_names_keyboard():
+    super_keys = []
+    keys = []
+    rowlimit = 4
+    no_of_keys_in_row = 0
+
+    for item in gym_names:
+        key = InlineKeyboardButton(f"{item}", callback_data=str(item).lower())
+        if no_of_keys_in_row == rowlimit:
+            super_keys.append(keys.copy())  # [[01,12,23,34]]
+            keys.clear()
+            no_of_keys_in_row = 0
+        keys.append(key)
+        no_of_keys_in_row += 1
+    super_keys.append(keys.copy())
+    return super_keys
+
+
+def generate_pattern_for_gym_names():
+    temp = ''
+    for item in gym_names:
+        temp += str(item).lower() + '|'
+    temp = temp[:-1]
+    final_pattern = '^' + temp + '$'
+    return final_pattern
+
 
 def generate_date_keyboard():
     keyboard = [[
@@ -176,6 +188,9 @@ def generate_pattern_for_weights():
     return final_pattern
 
 
+
+
+
 def gym(update, context):
     logger.info("Inside gym")
     chat_id = update.message.chat_id
@@ -242,7 +257,7 @@ def selected_minute_for_gym(update: Update, context: CallbackContext):
     gym_datetime = datetime.strptime(date_selected + ' ' + time_selected, '%Y-%m-%d %H:%M')
     chat_data['gym_datetime'] = gym_datetime
     logger.info(f"Selected time for Gym Exercise -> {gym_datetime}")
-    gym_keyboard = generate_gym_keyboard()
+    gym_keyboard = generate_gym_names_keyboard()
     update.callback_query.edit_message_text("Select type of Gym exercise",
                                   reply_markup=InlineKeyboardMarkup(inline_keyboard=gym_keyboard))
     return GYM_NAME
@@ -440,7 +455,7 @@ gym_handler = ConversationHandler(
         GYM_DATE: [CallbackQueryHandler(selected_gym_date, pattern='^today|yday|daybeforeyday|other$')],
         GYM_HOUR: [CallbackQueryHandler(selected_gym_hour, pattern=generate_pattern_for_gym_hour())],
         GYM_MINUTE: [CallbackQueryHandler(selected_minute_for_gym, pattern=generate_pattern_for_gym_minute())],
-        GYM_NAME: [CallbackQueryHandler(selected_gymname, pattern='^chest|biceps|shoulder|legs|triceps|other$')],
+        GYM_NAME: [CallbackQueryHandler(selected_gymname, pattern=generate_pattern_for_gym_names())],
         GYM_SET: [CallbackQueryHandler(gym_set, pattern=generate_pattern_for_set())],
         GYM_REPETITION: [CallbackQueryHandler(gym_repetition, pattern=generate_pattern_for_repetitions())],
         GYM_WEIGHT: [CallbackQueryHandler(gym_weight, pattern=generate_pattern_for_weights())],

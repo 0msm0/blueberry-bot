@@ -27,33 +27,60 @@ PRANAYAM_DATE, PRANAYAM_HOUR, PRANAYAM_MINUTE, PRANAYAM_NAME, PRANAYAM_REPETITIO
 
 minutes_list = [00, 10, 20, 30, 40, 50]
 
+pranayam_names = ['Anuloma Viloma Pranayama', 'Bhastrika Pranayama', 'Bhramari Pranayama', 'Dirga Pranayama', 'Kapalbhati Pranayama', 'Nadi Shodhana Pranayama','Shitali Pranayama', 'Simhasana Pranayama', 'Sitkari Pranayama', 'Surya Bhedana Pranayama', 'Ujjayi Pranayama']
 
-def generate_pranayam_keyboard():
-    keyboard = [[
-        InlineKeyboardButton("Dirga Pranayama", callback_data="dirga_pranayam"),
-        InlineKeyboardButton("Nadi Shodhana Pranayama", callback_data="nadi_shodhana_pranayam"),
-    ],
-        [
-            InlineKeyboardButton("Anuloma Viloma Pranayama", callback_data="anuloma_pranayam"),
-            InlineKeyboardButton("Surya Bhedana Pranayama", callback_data="surya_bhedana_pranayam"),
-        ],
-        [
-            InlineKeyboardButton("Ujjayi Pranayama", callback_data="ujjayi_pranayam"),
-            InlineKeyboardButton("Bhramari Pranayama", callback_data="bhramari_pranayam"),
-        ],
-        [
-            InlineKeyboardButton("Sitkari Pranayama", callback_data="sitkari_pranayam"),
-            InlineKeyboardButton("Bhastrika Pranayama", callback_data="bhastrika_pranayam"),
-        ],
-        [
-            InlineKeyboardButton("Kapalbhati Pranayama", callback_data="kapalbhati_pranayam"),
-            InlineKeyboardButton("Simhasana Pranayama", callback_data="simhasana_pranayam"),
-        ],
-        [
-            InlineKeyboardButton("Shitali Pranayama", callback_data="shitali_pranayam"),
-            InlineKeyboardButton("Others", callback_data="others"),
-        ]]
-    return keyboard
+def generate_pranayam_names_keyboard():
+    super_keys = []
+    keys = []
+    rowlimit = 4
+    no_of_keys_in_row = 0
+
+    for item in pranayam_names:
+        key = InlineKeyboardButton(f"{item}", callback_data=str(item).lower())
+        if no_of_keys_in_row == rowlimit:
+            super_keys.append(keys.copy())  # [[01,12,23,34]]
+            keys.clear()
+            no_of_keys_in_row = 0
+        keys.append(key)
+        no_of_keys_in_row += 1
+    super_keys.append(keys.copy())
+    return super_keys
+
+
+def generate_pattern_for_pranayam_names():
+    temp = ''
+    for item in pranayam_names:
+        temp += str(item).lower() + '|'
+    temp = temp[:-1]
+    final_pattern = '^' + temp + '$'
+    return final_pattern
+#
+# def generate_pranayam_keyboard():
+#     keyboard = [[
+#         InlineKeyboardButton("Dirga Pranayama", callback_data="dirga_pranayam"),
+#         InlineKeyboardButton("Nadi Shodhana Pranayama", callback_data="nadi_shodhana_pranayam"),
+#     ],
+#         [
+#             InlineKeyboardButton("Anuloma Viloma Pranayama", callback_data="anuloma_pranayam"),
+#             InlineKeyboardButton("Surya Bhedana Pranayama", callback_data="surya_bhedana_pranayam"),
+#         ],
+#         [
+#             InlineKeyboardButton("Ujjayi Pranayama", callback_data="ujjayi_pranayam"),
+#             InlineKeyboardButton("Bhramari Pranayama", callback_data="bhramari_pranayam"),
+#         ],
+#         [
+#             InlineKeyboardButton("Sitkari Pranayama", callback_data="sitkari_pranayam"),
+#             InlineKeyboardButton("Bhastrika Pranayama", callback_data="bhastrika_pranayam"),
+#         ],
+#         [
+#             InlineKeyboardButton("Kapalbhati Pranayama", callback_data="kapalbhati_pranayam"),
+#             InlineKeyboardButton("Simhasana Pranayama", callback_data="simhasana_pranayam"),
+#         ],
+#         [
+#             InlineKeyboardButton("Shitali Pranayama", callback_data="shitali_pranayam"),
+#             InlineKeyboardButton("Others", callback_data="others"),
+#         ]]
+#     return keyboard
 
 
 def generate_date_keyboard():
@@ -207,7 +234,7 @@ def selected_minute_for_pranayam(update: Update, context: CallbackContext):
     pranayam_datetime = datetime.strptime(date_selected + ' ' + time_selected, '%Y-%m-%d %H:%M')
     chat_data['pranayam_datetime'] = pranayam_datetime
     logger.info(f"Selected time for Pranayam -> {pranayam_datetime}")
-    keyboard = generate_pranayam_keyboard()
+    keyboard = generate_pranayam_names_keyboard()
     update.callback_query.edit_message_text("Select type of Pranayam exercise",
                               reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
     return PRANAYAM_NAME
@@ -347,9 +374,7 @@ pranayam_handler = ConversationHandler(
         PRANAYAM_DATE: [CallbackQueryHandler(selected_pranayam_date, pattern='^today|yday|daybeforeyday|other$')],
         PRANAYAM_HOUR: [CallbackQueryHandler(selected_pranayam_hour, pattern=generate_pattern_for_pranayam_hour())],
         PRANAYAM_MINUTE: [CallbackQueryHandler(selected_minute_for_pranayam, pattern=generate_pattern_for_pranayam_minute())],
-        PRANAYAM_NAME: [CallbackQueryHandler(selected_pranayamaname, pattern='^dirga_pranayam|nadi_shodhana_pranayam|anuloma_pranayam|'
-                                                                     'surya_bhedana_pranayam|ujjayi|bhramari_pranayam|sitkari_pranayam|bhastrika_pranayam|'
-                                                                     'kapalbhati_pranayam|simhasana_pranayam|shitali_pranayam|others$')],
+        PRANAYAM_NAME: [CallbackQueryHandler(selected_pranayamaname, pattern=generate_pattern_for_pranayam_names())],
         PRANAYAM_REPETITION: [CallbackQueryHandler(pranayam_repetition, pattern=generate_pattern_for_repetitions())],
         PRANAYAM_NOTE: [CommandHandler('skip_notes', skip_pranayam_notes),
                     MessageHandler(Filters.text, pranayam_notes)],

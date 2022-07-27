@@ -28,36 +28,63 @@ YOGA_DATE, YOGA_HOUR, YOGA_MINUTE, YOGA_NAME, YOGA_REPETITION, YOGA_NOTE = range
 
 minutes_list = [00, 10, 20, 30, 40, 50]
 
+yoga_names = ['Adho Mukha Svansana', 'Ardha Chandrasana', 'Balasana', 'Bhujangasana', 'Chakarasana', 'Garudasana', 'Gomukhasana', 'Surya Namaskar', 'Shavasana', 'Shirshasana', 'Sukhasana', 'Vajrasana', 'other']
 
-def generate_yoga_keyboard():
-    keyboard = [[
-            InlineKeyboardButton("Surya Namaskar", callback_data="surya_namaskar"),
-        ],
-        [
-            InlineKeyboardButton("Adho Mukha Svansana", callback_data="adho_mukha_svanasana"),
-            InlineKeyboardButton("Chakarasana", callback_data="chakarasana"),
-        ],
-        [
-            InlineKeyboardButton("Sukhasana", callback_data="sukhasana"),
-            InlineKeyboardButton("Ardha Chandrasana", callback_data="ardha_chandrasana"),
-        ],
-        [
-            InlineKeyboardButton("Garudasana", callback_data="garudasana"),
-            InlineKeyboardButton("Shavasana", callback_data="shavasana"),
-        ],
-        [
-            InlineKeyboardButton("Balasana", callback_data="balasana"),
-            InlineKeyboardButton("Vajrasana", callback_data="vajrasana"),
-        ],
-        [
-            InlineKeyboardButton("Bhujangasana", callback_data="bhujangasana"),
-            InlineKeyboardButton("Shirshasana", callback_data="shirshasana"),
-        ],
-        [
-            InlineKeyboardButton("Gomukhasana", callback_data="gomukhasana"),
-            InlineKeyboardButton("Others", callback_data="others"),
-        ]]
-    return keyboard
+def generate_yoga_names_keyboard():
+    super_keys = []
+    keys = []
+    rowlimit = 4
+    no_of_keys_in_row = 0
+
+    for item in yoga_names:
+        key = InlineKeyboardButton(f"{item}", callback_data=str(item).lower())
+        if no_of_keys_in_row == rowlimit:
+            super_keys.append(keys.copy())  # [[01,12,23,34]]
+            keys.clear()
+            no_of_keys_in_row = 0
+        keys.append(key)
+        no_of_keys_in_row += 1
+    super_keys.append(keys.copy())
+    return super_keys
+
+
+def generate_pattern_for_yoga_names():
+    temp = ''
+    for item in yoga_names:
+        temp += str(item).lower() + '|'
+    temp = temp[:-1]
+    final_pattern = '^' + temp + '$'
+    return final_pattern
+
+# def generate_yoga_keyboard():
+#     keyboard = [[
+#             InlineKeyboardButton("Surya Namaskar", callback_data="surya_namaskar"),
+#         ],
+#         [
+#             InlineKeyboardButton("Adho Mukha Svansana", callback_data="adho_mukha_svanasana"),
+#             InlineKeyboardButton("Chakarasana", callback_data="chakarasana"),
+#         ],
+#         [
+#             InlineKeyboardButton("Sukhasana", callback_data="sukhasana"),
+#             InlineKeyboardButton("Ardha Chandrasana", callback_data="ardha_chandrasana"),
+#         ],
+#         [
+#             InlineKeyboardButton("Garudasana", callback_data="garudasana"),
+#             InlineKeyboardButton("Shavasana", callback_data="shavasana"),
+#         ],
+#         [
+#             InlineKeyboardButton("Balasana", callback_data="balasana"),
+#             InlineKeyboardButton("Vajrasana", callback_data="vajrasana"),
+#         ],
+#         [
+#             InlineKeyboardButton("Bhujangasana", callback_data="bhujangasana"),
+#             InlineKeyboardButton("Shirshasana", callback_data="shirshasana"),
+#         ],
+#         [
+#             InlineKeyboardButton("Gomukhasana", callback_data="gomukhasana"),
+#             InlineKeyboardButton("Others", callback_data="others"),
+#         ]]
+#     return keyboard
 
 
 def generate_date_keyboard():
@@ -209,7 +236,7 @@ def selected_minute_for_yoga(update: Update, context: CallbackContext):
     yoga_datetime = datetime.strptime(date_selected + ' ' + time_selected, '%Y-%m-%d %H:%M')
     chat_data['yoga_datetime'] = yoga_datetime
     logger.info(f"Selected time for Yoga -> {yoga_datetime}")
-    keyboard = generate_yoga_keyboard()
+    keyboard = generate_yoga_names_keyboard()
     update.callback_query.edit_message_text("Select type of Yoga exercise",
                               reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
     return YOGA_NAME
@@ -343,9 +370,7 @@ yoga_handler = ConversationHandler(
         YOGA_DATE: [CallbackQueryHandler(selected_yoga_date, pattern='^today|yday|daybeforeyday|other$')],
         YOGA_HOUR: [CallbackQueryHandler(selected_yoga_hour, pattern=generate_pattern_for_yoga_hour())],
         YOGA_MINUTE: [CallbackQueryHandler(selected_minute_for_yoga, pattern=generate_pattern_for_yoga_minute())],
-        YOGA_NAME: [CallbackQueryHandler(selected_yoganame, pattern='^surya_namaskar|adho_mukha_svanasana|chakarasana|sukhasana|'
-                                                                    'ardha_chandrasana|garudasana|shavasana|balasana|vajrasana|'
-                                                                    'bhujangasana|shirshasana|gomukhasana|others$')],
+        YOGA_NAME: [CallbackQueryHandler(selected_yoganame, pattern=generate_pattern_for_yoga_names())],
         YOGA_REPETITION: [CallbackQueryHandler(yoga_repetition, pattern=generate_pattern_for_repetitions())],
         YOGA_NOTE: [CommandHandler('skip_notes', skip_yoga_notes),
                     MessageHandler(Filters.text, yoga_notes)],
