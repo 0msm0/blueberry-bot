@@ -119,7 +119,7 @@ def mycryptorewards(update, context):
 crypto_handler = ConversationHandler(
     entry_points=[CommandHandler('crypto', crypto)],
     states={
-        WALLET: [MessageHandler(Filters.text, addwallet)],
+        WALLET: [MessageHandler(Filters.text and ~Filters.command, addwallet)],
         ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_crypto)]
     },
     fallbacks=[CommandHandler('cancelcrypto', cancelcrypto)],
