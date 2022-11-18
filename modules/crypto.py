@@ -36,8 +36,8 @@ def addwallet(update, context):
     chat_data = context.chat_data
     wallet_addr = update.message.text
     if len(wallet_addr) != 42:
-        update.message.reply_text("Doesn't look like wallet address. Try again.")
-        return WALLET
+        update.message.reply_text("Doesn't look like wallet address. Try /crypto again.")
+        return ConversationHandler.END
     if not chat_data.get('wallet'):
         chat_data['wallet'] = list()
     chat_data['wallet'].append(wallet_addr)
