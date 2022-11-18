@@ -104,7 +104,7 @@ def mytaskcompleted(update, context):
             if user.tasks.count():
                 for _id, item in enumerate(user.tasks.order_by('tasks').all()):
                     if _id < 5:
-                        update.effective_message.reply_text(f"{item.id} {item.tasks.replace(',,,', ', ')}")
+                        update.effective_message.reply_text(f"{_id}. {item.tasks.replace(',,,', ', ')}")
             else:
                 update.effective_message.reply_text("You haven't added a single completed tasks record. Use /taskcompleted to get started")
 

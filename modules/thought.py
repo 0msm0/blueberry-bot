@@ -106,7 +106,7 @@ def mythought(update, context):
             if user.thoughts.count():
                 for _id, item in enumerate(user.thoughts.order_by('thoughts').all()):
                     if _id < 5:
-                        update.effective_message.reply_text(f"{item.id} {item.thoughts.replace(',,,', ', ')}")
+                        update.effective_message.reply_text(f"{_id}. {item.thoughts.replace(',,,', ', ')}")
             else:
                 update.effective_message.reply_text("You haven't added a single thoughts record. Use /thoughts to get started")
 
