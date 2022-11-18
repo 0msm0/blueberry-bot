@@ -1,5 +1,6 @@
 from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, Filters, CallbackQueryHandler, inlinequeryhandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.bot import BotCommand
 from dotenv import load_dotenv
 import os
 from models import User, Timezone, Wakesleep, Food, Gym, Yoga, Pranayam, Thoughts, Taskcompleted
@@ -46,6 +47,11 @@ def error_callback(update, context):
         logger.error(f"EXCEPTION from error_callback. Update - {update} caused error {context.error}", exc_info=True)
 
 
+def set_bot_commands(updater):
+    commands = [BotCommand(key, val) for key, val in dict(suggested_commands).items()]
+    updater.bot.set_my_commands(commands)
+
+
 if __name__ == '__main__':
     User.__table__.create(engine, checkfirst=True)
     Timezone.__table__.create(engine, checkfirst=True)
@@ -58,6 +64,7 @@ if __name__ == '__main__':
     Taskcompleted.__table__.create(engine, checkfirst=True)
 
     updater = Updater(token=token, use_context=True)
+    set_bot_commands(updater)
     dp: Dispatcher = updater.dispatcher
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('mytimezone', mytimezone))
@@ -66,6 +73,8 @@ if __name__ == '__main__':
     dp.add_handler(CommandHandler('mygym', mygym))
     dp.add_handler(CommandHandler('myyoga', myyoga))
     dp.add_handler(CommandHandler('mypranayam', mypranayam))
+    dp.add_handler(CommandHandler('mythoughts', mythoughts))
+    dp.add_handler(CommandHandler('mytaskscompleted', mytasks))
     dp.add_handler(registration_handler)
     dp.add_handler(set_timezone_handler)
     dp.add_handler(wakesleep_handler)
