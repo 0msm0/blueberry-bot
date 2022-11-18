@@ -76,7 +76,7 @@ def save_tasks_record(update, context):
                 logger.info(f"Completed Tasks record added - {tasks_record}")
                 update.effective_message.reply_text(f"Record added - \n\n"
                                                     f"{tasks_record.tasks}", parse_mode='HTML')
-                update.effective_message.reply_text(f"Use /mytasks to check previous records")
+                update.effective_message.reply_text(f"Use /mytaskcompleted to check previous records")
                 try:
                     message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
                     context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
