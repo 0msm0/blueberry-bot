@@ -16,6 +16,7 @@ from modules.pranayam import pranayam_handler, mypranayam
 from modules.taskcompleted import task_handler, mytasks
 from modules.thoughts import thoughts_handler, mythoughts
 from modules.getcurrentuser import get_current_user
+from bot_commands import suggested_commands
 
 load_dotenv()
 
