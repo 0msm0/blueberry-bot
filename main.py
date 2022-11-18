@@ -2,7 +2,7 @@ from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackContext, C
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import load_dotenv
 import os
-from models import User, Timezone, Wakesleep, Food, Gym, Yoga, Pranayam
+from models import User, Timezone, Wakesleep, Food, Gym, Yoga, Pranayam, Thoughts, Taskcompleted
 from dbhelper import Session, engine
 import logging
 from modules.food import food_handler, myfood
@@ -12,6 +12,8 @@ from modules.wakesleep import wakesleep_handler, mywakesleep
 from modules.gym import gym_handler, mygym
 from modules.yoga import yoga_handler, myyoga
 from modules.pranayam import pranayam_handler, mypranayam
+from modules.taskcompleted import task_handler, mytasks
+from modules.thoughts import thoughts_handler, mythoughts
 from modules.getcurrentuser import get_current_user
 
 load_dotenv()
@@ -52,6 +54,8 @@ if __name__ == '__main__':
     Gym.__table__.create(engine, checkfirst=True)
     Yoga.__table__.create(engine, checkfirst=True)
     Pranayam.__table__.create(engine, checkfirst=True)
+    Thoughts.__table__.create(engine, checkfirst=True)
+    Taskcompleted.__table__.create(engine, checkfirst=True)
 
     updater = Updater(token=token, use_context=True)
     dp: Dispatcher = updater.dispatcher
@@ -69,6 +73,8 @@ if __name__ == '__main__':
     dp.add_handler(gym_handler)
     dp.add_handler(yoga_handler)
     dp.add_handler(pranayam_handler)
+    dp.add_handler(thoughts_handler)
+    dp.add_handler(task_handler)
     dp.add_error_handler(error_callback)
 
     tg_mode = os.environ.get("TG_MODE", "polling")

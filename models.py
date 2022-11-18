@@ -20,6 +20,9 @@ class User(Base):
     gyms = relationship("Gym", back_populates='users', lazy='dynamic')
     yogas = relationship("Yoga", back_populates='users', lazy='dynamic')
     pranayams = relationship("Pranayam", back_populates='users', lazy='dynamic')
+    thoughts = relationship("Thoughts", back_populates='users', lazy='dynamic')
+    tasks = relationship("Taskcompleted", back_populates='users', lazy='dynamic')
+    rundowns = relationship("Rundown", back_populates='users', lazy='dynamic')
     # records = relationship("Record", back_populates='users', lazy='dynamic')
     # bookmarks = relationship("Bookmark", back_populates='users', lazy='dynamic')
 
@@ -206,4 +209,53 @@ class Pranayam(Base):
 
     def __repr__(self):
         return f"Pranayama :- id - {self.id}, user_id - {self.user_id}, pranayam_type - {self.pranayam_type}, pranayam_datetime - {self.pranayam_datetime}, repetition - {self.repetition}, pranayam_notes - {self.pranayam_notes}, created_at - {self.created_at}"
+
+class Thoughts(Base):
+    __tablename__ = 'thoughts'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    thoughts = Column(String(500), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_thoughts_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_thoughts_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_thoughts_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Thoughts :- id - {self.id}, user_id - {self.user_id}, thoughts - {self.thoughts}, created_at - {self.created_at}"
+
+
+class Taskcompleted(Base):
+    __tablename__ = 'tasks'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    tasks = Column(String(500), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_thoughts_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_thoughts_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+    @classmethod
+    def get_thoughts_by_date_and_userid(cls, session, date, userid):
+        pass
+        # return session.query(cls).filter(cls.id == userid).first()
+
+    def __repr__(self):
+        return f"Completed Tasks :- id - {self.id}, user_id - {self.user_id}, tasks - {self.tasks}, created_at - {self.created_at}"
 
