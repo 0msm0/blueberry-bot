@@ -122,6 +122,6 @@ crypto_handler = ConversationHandler(
         WALLET: [MessageHandler(Filters.text and ~Filters.command, addwallet)],
         ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_crypto)]
     },
-    fallbacks=[CommandHandler('cancelcrypto', cancelcrypto)],
+    fallbacks=[CommandHandler('idonthavewallet', idonthavewallet)],
     conversation_timeout=crypto_timeout_time
 )
