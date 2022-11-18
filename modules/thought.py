@@ -77,7 +77,7 @@ def save_thoughts_record(update, context):
                 session.commit()
                 logger.info(f"Thoughts record added - {thoughts_record}")
                 update.effective_message.reply_text(f"Record added - \n\n"
-                                                    f"<b>Thoughts:</b> {thoughts_record.thoughts}", parse_mode='HTML')
+                                                    f"{thoughts_record.thoughts}", parse_mode='HTML')
                 update.effective_message.reply_text(f"Use /mythoughts to check previous records")
                 try:
                     message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
