@@ -261,7 +261,7 @@ class Taskcompleted(Base):
 
 
 class Crypto(Base):
-    __tablename__ = 'crypto'
+    __tablename__ = 'cryptos'
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     wallet = Column(String(500), nullable=False)

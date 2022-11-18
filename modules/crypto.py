@@ -98,8 +98,8 @@ def mycrypto(update, context):
         chat_id = update.effective_message.chat_id
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
         if user:
-            if user.crypto.count():
-                for _id, item in enumerate(user.crypto.order_by('wallet').all()):
+            if user.cryptos.count():
+                for _id, item in enumerate(user.cryptos.order_by('wallet').all()):
                     if _id < 5:
                         update.effective_message.reply_text(f"{_id}. {item.wallet.replace(',,,', ', ')}")
             else:
