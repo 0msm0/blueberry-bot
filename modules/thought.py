@@ -27,7 +27,7 @@ def thoughts(update, context):
         if user:
             # update.message.reply_text("Let's start. (use /cancelthoughts if you want to cancel)")
             # chat_data = context.chat_data
-            update.message.reply_text("Write your Thoughts. \n\n use /cancelthought to cancel\nuse /donethoughts once written")
+            update.message.reply_text("Write your Thoughts. \n\nclick /cancelthought to cancel\nclick /donethoughts after writing")
             return THOUGHTS
 
 
@@ -98,7 +98,7 @@ def timeout_thought(update, context):
     return ConversationHandler.END
 
 
-def mythoughts(update, context):
+def mythought(update, context):
     with Session() as session:
         chat_id = update.effective_message.chat_id
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)

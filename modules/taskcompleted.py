@@ -25,7 +25,7 @@ def taskcompleted(update, context):
     with Session() as session:
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
         if user:
-            update.message.reply_text("Write your Completed Tasks. \n\n use /canceltaskcompleted to cancel\nuse /donetasks after writing")
+            update.message.reply_text("Write your Completed Tasks. \n\nclick /canceltaskcompleted to cancel\nclick /donetasks after writing")
             return TASKS
 
 
@@ -96,7 +96,7 @@ def timeout_taskcompleted(update, context):
     return ConversationHandler.END
 
 
-def mytasks(update, context):
+def mytaskcompleted(update, context):
     with Session() as session:
         chat_id = update.effective_message.chat_id
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
@@ -106,10 +106,10 @@ def mytasks(update, context):
                     if _id < 5:
                         update.effective_message.reply_text(f"{_id}. {item.id} {item.tasks.replace(',,,', ', ')}")
             else:
-                update.effective_message.reply_text("You haven't added a single completed tasks record. Use /tasks to get started")
+                update.effective_message.reply_text("You haven't added a single completed tasks record. Use /taskcompleted to get started")
 
 
-task_handler = ConversationHandler(
+taskcompleted_handler = ConversationHandler(
     entry_points=[CommandHandler('taskcompleted', taskcompleted)],
     states={
         TASKS: [CommandHandler('donetasks', done_tasks),

@@ -13,8 +13,8 @@ from modules.wakesleep import wakesleep_handler, mywakesleep
 from modules.gym import gym_handler, mygym
 from modules.yoga import yoga_handler, myyoga
 from modules.pranayam import pranayam_handler, mypranayam
-from modules.taskcompleted import task_handler, mytasks
-from modules.thought import thoughts_handler, mythoughts
+from modules.taskcompleted import taskcompleted_handler, mytaskcompleted
+from modules.thought import thoughts_handler, mythought
 from modules.getcurrentuser import get_current_user
 from bot_commands import suggested_commands
 
@@ -74,8 +74,8 @@ if __name__ == '__main__':
     dp.add_handler(CommandHandler('mygym', mygym))
     dp.add_handler(CommandHandler('myyoga', myyoga))
     dp.add_handler(CommandHandler('mypranayam', mypranayam))
-    dp.add_handler(CommandHandler('mythoughts', mythoughts))
-    dp.add_handler(CommandHandler('mytaskscompleted', mytasks))
+    dp.add_handler(CommandHandler('mythought', mythought))
+    dp.add_handler(CommandHandler('mytaskcompleted', mytaskcompleted))
     dp.add_handler(registration_handler)
     dp.add_handler(set_timezone_handler)
     dp.add_handler(wakesleep_handler)
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     dp.add_handler(yoga_handler)
     dp.add_handler(pranayam_handler)
     dp.add_handler(thoughts_handler)
-    dp.add_handler(task_handler)
+    dp.add_handler(taskcompleted_handler)
     dp.add_error_handler(error_callback)
 
     tg_mode = os.environ.get("TG_MODE", "polling")
