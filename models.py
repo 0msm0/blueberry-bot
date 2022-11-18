@@ -22,7 +22,6 @@ class User(Base):
     pranayams = relationship("Pranayam", back_populates='users', lazy='dynamic')
     thoughts = relationship("Thoughts", back_populates='users', lazy='dynamic')
     tasks = relationship("Taskcompleted", back_populates='users', lazy='dynamic')
-    rundowns = relationship("Rundown", back_populates='users', lazy='dynamic')
     # records = relationship("Record", back_populates='users', lazy='dynamic')
     # bookmarks = relationship("Bookmark", back_populates='users', lazy='dynamic')
 
