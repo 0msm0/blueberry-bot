@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.bot import BotCommand
 from dotenv import load_dotenv
 import os
-from models import User, Timezone, Wakesleep, Food, Gym, Yoga, Pranayam, Thoughts, Taskcompleted
+from models import User, Timezone, Wakesleep, Food, Gym, Yoga, Pranayam, Thoughts, Taskcompleted, Crypto
 from dbhelper import Session, engine
 import logging
 from modules.food import food_handler, myfood
@@ -15,6 +15,7 @@ from modules.yoga import yoga_handler, myyoga
 from modules.pranayam import pranayam_handler, mypranayam
 from modules.taskcompleted import taskcompleted_handler, mytaskcompleted
 from modules.thought import thoughts_handler, mythought
+from modules.crypto import crypto_handler, mycrypto, mycryptorewards
 from modules.getcurrentuser import get_current_user
 from bot_commands import suggested_commands
 
@@ -63,6 +64,7 @@ if __name__ == '__main__':
     Pranayam.__table__.create(engine, checkfirst=True)
     Thoughts.__table__.create(engine, checkfirst=True)
     Taskcompleted.__table__.create(engine, checkfirst=True)
+    Crypto.__table__.create(engine, checkfirst=True)
 
     updater = Updater(token=token, use_context=True)
     set_bot_commands(updater)
@@ -76,6 +78,8 @@ if __name__ == '__main__':
     dp.add_handler(CommandHandler('mypranayam', mypranayam))
     dp.add_handler(CommandHandler('mythought', mythought))
     dp.add_handler(CommandHandler('mytaskcompleted', mytaskcompleted))
+    dp.add_handler(CommandHandler('mycrypto', mycrypto))
+    dp.add_handler(CommandHandler('mycryptorewards', mycryptorewards))
     dp.add_handler(registration_handler)
     dp.add_handler(set_timezone_handler)
     dp.add_handler(wakesleep_handler)
@@ -85,6 +89,7 @@ if __name__ == '__main__':
     dp.add_handler(pranayam_handler)
     dp.add_handler(thoughts_handler)
     dp.add_handler(taskcompleted_handler)
+    dp.add_handler(crypto_handler)
     dp.add_error_handler(error_callback)
 
     tg_mode = os.environ.get("TG_MODE", "polling")

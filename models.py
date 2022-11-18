@@ -22,6 +22,7 @@ class User(Base):
     pranayams = relationship("Pranayam", back_populates='users', lazy='dynamic')
     thoughts = relationship("Thoughts", back_populates='users', lazy='dynamic')
     tasks = relationship("Taskcompleted", back_populates='users', lazy='dynamic')
+    cryptos = relationship("Crypto", back_populates='users', lazy='dynamic')
     # records = relationship("Record", back_populates='users', lazy='dynamic')
     # bookmarks = relationship("Bookmark", back_populates='users', lazy='dynamic')
 
@@ -257,4 +258,25 @@ class Taskcompleted(Base):
 
     def __repr__(self):
         return f"Completed Tasks :- id - {self.id}, user_id - {self.user_id}, tasks - {self.tasks}, created_at - {self.created_at}"
+
+
+class Crypto(Base):
+    __tablename__ = 'crypto'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    wallet = Column(String(500), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.now())
+    users = relationship('User')
+
+    @classmethod
+    def get_all_walletss_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).all()
+
+    @classmethod
+    def get_latest_wallets_by_userid(cls, session, userid):
+        return session.query(cls).filter(cls.id == userid).first()
+
+
+    def __repr__(self):
+        return f"Crypto (Wallet):- id - {self.id}, user_id - {self.user_id}, wallet - {self.wallet}, created_at - {self.created_at}"
 
