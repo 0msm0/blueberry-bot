@@ -16,6 +16,7 @@ formatter = logging.Formatter(log_format)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+taskcompleted_timeout_time = 120
 TASKS = range(1)
 
 def taskcompleted(update, context):
@@ -24,7 +25,7 @@ def taskcompleted(update, context):
     with Session() as session:
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
         if user:
-            update.message.reply_text("Write your Completed Tasks. \n\n use /donetasks once complete")
+            update.message.reply_text("Write your Completed Tasks. \n\n use /canceltaskcompleted to cancel\nuse /donetasks after writing")
             return TASKS
 
 
@@ -85,6 +86,16 @@ def save_tasks_record(update, context):
             clear_chatdata(context=context)
 
 
+def canceltaskcompleted(update, context):
+    update.effective_message.reply_text('Thought command cancelled!')
+    return ConversationHandler.END
+
+
+def timeout_taskcompleted(update, context):
+    update.effective_message.reply_text(f'Taskcompleted command timedout! (timeout limit - {taskcompleted_timeout_time} sec')
+    return ConversationHandler.END
+
+
 def mytasks(update, context):
     with Session() as session:
         chat_id = update.effective_message.chat_id
@@ -102,7 +113,9 @@ task_handler = ConversationHandler(
     entry_points=[CommandHandler('taskcompleted', taskcompleted)],
     states={
         TASKS: [CommandHandler('donetasks', done_tasks),
-                    MessageHandler(Filters.text, add_completed_tasks)]
+                    MessageHandler(Filters.text, add_completed_tasks)],
+        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_taskcompleted)]
     },
-    fallbacks=[]
+    fallbacks=[CommandHandler('canceltaskcompleted', canceltaskcompleted)],
+    conversation_timeout=taskcompleted_timeout_time
 )

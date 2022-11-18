@@ -16,6 +16,7 @@ formatter = logging.Formatter(log_format)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+thought_timeout_time = 120
 THOUGHTS = range(1)
 
 def thoughts(update, context):
@@ -26,7 +27,7 @@ def thoughts(update, context):
         if user:
             # update.message.reply_text("Let's start. (use /cancelthoughts if you want to cancel)")
             # chat_data = context.chat_data
-            update.message.reply_text("Write your Thoughts. \n\n use /donethoughts once complete")
+            update.message.reply_text("Write your Thoughts. \n\n use /cancelthought to cancel\nuse /donethoughts once written")
             return THOUGHTS
 
 
@@ -87,6 +88,16 @@ def save_thoughts_record(update, context):
             clear_chatdata(context=context)
 
 
+def cancelthought(update, context):
+    update.effective_message.reply_text('Thought command cancelled!')
+    return ConversationHandler.END
+
+
+def timeout_thought(update, context):
+    update.effective_message.reply_text(f'Thought command timedout! (timeout limit - {thought_timeout_time} sec')
+    return ConversationHandler.END
+
+
 def mythoughts(update, context):
     with Session() as session:
         chat_id = update.effective_message.chat_id
@@ -101,10 +112,12 @@ def mythoughts(update, context):
 
 
 thoughts_handler = ConversationHandler(
-    entry_points=[CommandHandler('thoughts', thoughts)],
+    entry_points=[CommandHandler('thought', thoughts)],
     states={
         THOUGHTS: [CommandHandler('donethoughts', done_thoughts),
-                    MessageHandler(Filters.text, add_thoughts)]
+                    MessageHandler(Filters.text, add_thoughts)],
+        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_thought)]
     },
-    fallbacks=[]
+    fallbacks=[CommandHandler('cancelthought', cancelthought)],
+    conversation_timeout=thought_timeout_time
 )
