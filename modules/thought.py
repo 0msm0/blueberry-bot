@@ -27,7 +27,7 @@ def thoughts(update, context):
         if user:
             # update.message.reply_text("Let's start. (use /cancelthoughts if you want to cancel)")
             # chat_data = context.chat_data
-            update.message.reply_text("Write your Thoughts. \n\nclick /cancelthought to cancel\nclick /donethoughts after writing")
+            update.message.reply_text("Write your Thoughts. \n\nclick /cancelthought to cancel\nclick /donethought after writing")
             return THOUGHTS
 
 
@@ -72,7 +72,7 @@ def save_thoughts_record(update, context):
                 session.rollback()
                 clear_chatdata(context=context)
                 logger.error(f"Error saving thoughts to database", exc_info=True)
-                update.effective_message.reply_text("Something wrong, please try /thoughts again..")
+                update.effective_message.reply_text("Something wrong, please try /thought again..")
             else:
                 session.commit()
                 logger.info(f"Thoughts record added - {thoughts_record}")
