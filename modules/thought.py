@@ -41,11 +41,11 @@ def add_thoughts(update, context):
     return THOUGHTS
 
 
-def done_thoughts(update, context):
+def done_thought(update, context):
     chat_data = context.chat_data
     if not chat_data.get('thoughts'):
         len_of_thoughts = 0
-        update.message.reply_text("Atleast one thought is needed, use /donethoughts once done")
+        update.message.reply_text("Atleast one thought is needed, use /donethought once done")
         return THOUGHTS
     else:
         len_of_thoughts = len(chat_data['thoughts'])
@@ -78,7 +78,7 @@ def save_thoughts_record(update, context):
                 logger.info(f"Thoughts record added - {thoughts_record}")
                 update.effective_message.reply_text(f"Record added - \n\n"
                                                     f"{thoughts_record.thoughts}", parse_mode='HTML')
-                update.effective_message.reply_text(f"Use /mythoughts to check previous records")
+                update.effective_message.reply_text(f"Use /mythought to check previous records")
                 try:
                     message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
                     context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
@@ -114,8 +114,8 @@ def mythought(update, context):
 thoughts_handler = ConversationHandler(
     entry_points=[CommandHandler('thought', thoughts)],
     states={
-        THOUGHTS: [CommandHandler('donethoughts', done_thoughts),
-                    MessageHandler(Filters.text, add_thoughts)],
+        THOUGHTS: [CommandHandler('donethought', done_thought),
+                    MessageHandler(Filters.text and ~Filters.command, add_thoughts)],
         ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_thought)]
     },
     fallbacks=[CommandHandler('cancelthought', cancelthought)],

@@ -25,7 +25,7 @@ def taskcompleted(update, context):
     with Session() as session:
         user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
         if user:
-            update.message.reply_text("Write your Completed Tasks. \n\nclick /canceltaskcompleted to cancel\nclick /donetasks after writing")
+            update.message.reply_text("Write your Completed Tasks. \n\nclick /canceltaskcompleted to cancel\nclick /donetask after writing")
             return TASKS
 
 
@@ -39,11 +39,11 @@ def add_completed_tasks(update, context):
     return TASKS
 
 
-def done_tasks(update, context):
+def done_task(update, context):
     chat_data = context.chat_data
     if not chat_data.get('tasks'):
         len_of_tasks = 0
-        update.message.reply_text("Atleast one task is needed, use /donetasks once done")
+        update.message.reply_text("Atleast one task is needed, use /donetask once done")
         return TASKS
     else:
         len_of_tasks = len(chat_data['tasks'])
@@ -112,8 +112,8 @@ def mytaskcompleted(update, context):
 taskcompleted_handler = ConversationHandler(
     entry_points=[CommandHandler('taskcompleted', taskcompleted)],
     states={
-        TASKS: [CommandHandler('donetasks', done_tasks),
-                    MessageHandler(Filters.text, add_completed_tasks)],
+        TASKS: [CommandHandler('donetask', done_task),
+                    MessageHandler(Filters.text and ~Filters.command, add_completed_tasks)],
         ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_taskcompleted)]
     },
     fallbacks=[CommandHandler('canceltaskcompleted', canceltaskcompleted)],
