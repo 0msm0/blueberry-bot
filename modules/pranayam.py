@@ -1,386 +1,260 @@
-from sqlalchemy import desc
-import os
-from telegram.ext import ConversationHandler, inlinequeryhandler, CallbackContext, CallbackQueryHandler, CommandHandler, \
-    MessageHandler, Filters
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, constants
+"""
+Pranayam (breathing exercise) tracking conversation handler.
+
+Requires python-telegram-bot v21+
+"""
+from datetime import datetime
+
 from telegram import Update
+from telegram.ext import (
+    CommandHandler,
+    ConversationHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes,
+)
+from sqlalchemy import desc
+
 from dbhelper import Session
-import logging
-
 from models import User, Pranayam
-from modules.getcurrentuser import get_current_user
-from modules.helpers import clear_chatdata
-from datetime import datetime, timedelta
-import requests
+from utils.logger import get_logger
+from utils.keyboards import (
+    generate_minute_keyboard,
+    generate_number_keyboard,
+    generate_options_keyboard,
+    make_markup,
+    DATE_KEYBOARD,
+    HOUR_KEYBOARD,
+)
+from utils.patterns import DATE_PATTERN, HOUR_PATTERN, MINUTE_PATTERN
+from utils.formatters import readable_datetime, parse_date_selection, combine_date_time
+from modules.getcurrentuser import get_user_with_timezone
+from modules.helpers import clear_chat_data
 
-log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logger = logging.getLogger(__name__)
-logger.setLevel('INFO')
-file_handler = logging.FileHandler("logs/app.log")
-formatter = logging.Formatter(log_format)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+logger = get_logger(__name__)
 
-pranayam_timeout_time = 120
+# Conversation states
+DATE, HOUR, MINUTE, PRANAYAM_TYPE, REPS, NOTES = range(6)
 
-PRANAYAM_DATE, PRANAYAM_HOUR, PRANAYAM_MINUTE, PRANAYAM_NAME, PRANAYAM_REPETITION, PRANAYAM_NOTE = range(6)
+# Configuration
+TIMEOUT_SECONDS = 600  # 10 minutes
 
-minutes_list = [00, 10, 20, 30, 40, 50]
+# Pranayam types - expanded list
+PRANAYAM_TYPES = [
+    ("Anulom Vilom", "anulom_vilom"),
+    ("Kapalbhati", "kapalbhati"),
+    ("Bhastrika", "bhastrika"),
+    ("Bhramari", "bhramari"),
+    ("Ujjayi", "ujjayi"),
+    ("Dirga", "dirga"),
+    ("Nadi Shodhana", "nadi_shodhana"),
+    ("Shitali", "shitali"),
+    ("Sitkari", "sitkari"),
+    ("Surya Bhedana", "surya_bhedana"),
+    ("Simhasana", "simhasana"),
+    ("Other", "other"),
+]
 
-pranayam_names = ['Anuloma Viloma Pranayama', 'Bhastrika Pranayama', 'Bhramari Pranayama', 'Dirga Pranayama', 'Kapalbhati Pranayama', 'Nadi Shodhana Pranayama','Shitali Pranayama', 'Simhasana Pranayama', 'Sitkari Pranayama', 'Surya Bhedana Pranayama', 'Ujjayi Pranayama']
-
-def generate_pranayam_names_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 4
-    no_of_keys_in_row = 0
-
-    for item in pranayam_names:
-        key = InlineKeyboardButton(f"{item}", callback_data=str(item).lower())
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())  # [[01,12,23,34]]
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)
-        no_of_keys_in_row += 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_pattern_for_pranayam_names():
-    temp = ''
-    for item in pranayam_names:
-        temp += str(item).lower() + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-#
-# def generate_pranayam_keyboard():
-#     keyboard = [[
-#         InlineKeyboardButton("Dirga Pranayama", callback_data="dirga_pranayam"),
-#         InlineKeyboardButton("Nadi Shodhana Pranayama", callback_data="nadi_shodhana_pranayam"),
-#     ],
-#         [
-#             InlineKeyboardButton("Anuloma Viloma Pranayama", callback_data="anuloma_pranayam"),
-#             InlineKeyboardButton("Surya Bhedana Pranayama", callback_data="surya_bhedana_pranayam"),
-#         ],
-#         [
-#             InlineKeyboardButton("Ujjayi Pranayama", callback_data="ujjayi_pranayam"),
-#             InlineKeyboardButton("Bhramari Pranayama", callback_data="bhramari_pranayam"),
-#         ],
-#         [
-#             InlineKeyboardButton("Sitkari Pranayama", callback_data="sitkari_pranayam"),
-#             InlineKeyboardButton("Bhastrika Pranayama", callback_data="bhastrika_pranayam"),
-#         ],
-#         [
-#             InlineKeyboardButton("Kapalbhati Pranayama", callback_data="kapalbhati_pranayam"),
-#             InlineKeyboardButton("Simhasana Pranayama", callback_data="simhasana_pranayam"),
-#         ],
-#         [
-#             InlineKeyboardButton("Shitali Pranayama", callback_data="shitali_pranayam"),
-#             InlineKeyboardButton("Others", callback_data="others"),
-#         ]]
-#     return keyboard
+PRANAYAM_TYPE_KEYBOARD = generate_options_keyboard(PRANAYAM_TYPES, columns=3)
+PRANAYAM_TYPE_PATTERN = "^" + "|".join([opt[1] for opt in PRANAYAM_TYPES]) + "$"
 
 
-def generate_date_keyboard():
-    keyboard = [[
-        InlineKeyboardButton("today", callback_data="today"),
-        InlineKeyboardButton("yday", callback_data="yday"),
-        InlineKeyboardButton("daybeforeyday", callback_data="daybeforeyday"),
-        InlineKeyboardButton("other", callback_data="other"),  # TODO - Handle this
-    ]]
-    return keyboard
-
-def generate_hour_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 4
-    no_of_keys_in_row = 0
-
-    for hour in range(24):
-        key = InlineKeyboardButton(f"{hour}-{hour + 1}", callback_data=str(hour))
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())  # [[01,12,23,34]]
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)  # 0-1, 1-2, 2-3, 3-4  # 4-5
-        no_of_keys_in_row += 1  # 1,2, 3, 4, 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_minute_keyboard(hour):
-    minutes_to_show = [str(hour) + ':' + str(round(minute, 2)) for minute in
-                       minutes_list]  # TODO - should show 9:00 instead of 9:0
-    keys = []
-    for item in minutes_to_show:
-        key = InlineKeyboardButton(f"{item}", callback_data=str(item))
-        keys.append(key)
-    final_minutes_keyboard = [keys]
-    return final_minutes_keyboard
-
-
-def generate_repetitions_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 5
-    no_of_keys_in_row = 0
-    for repetition in range(1,16):
-        key = InlineKeyboardButton(f"{repetition}", callback_data=str(repetition))
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)
-        no_of_keys_in_row += 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_pattern_for_pranayam_hour():
-    temp = ''
-    for hour in range(24):
-        temp += str(hour) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def generate_pattern_for_pranayam_minute():
-    temp = ''
-    for hour in range(24):
-        for minute in minutes_list:
-            temp += str(hour) + ':' + str(minute) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def generate_pattern_for_repetitions():
-    temp = ''
-    for repetition in range(1,16):
-        temp += str(repetition) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def pranayam(update, context):
-    logger.info("Inside pranayam")
+async def pranayam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for pranayam logging."""
     chat_id = update.message.chat_id
+
     with Session() as session:
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            if user.timezones.count():
-                keyboard = generate_date_keyboard()
-                update.message.reply_text("Let's start. (use /cancelpranayam if you want to cancel)")
-                update.message.reply_text("Date of Pranayam Exercise? (Use /cancelpranayam to cancel)",
-                                          reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-                query_message_id = update.message.message_id + 1
-                chat_data = context.chat_data
-                chat_data['message_id_of_letsstart'] = query_message_id
-                return PRANAYAM_DATE
+        user = await get_user_with_timezone(chat_id, update, context, session)
+        if not user:
+            return ConversationHandler.END
+
+    context.chat_data.clear()
+    await update.message.reply_text(
+        "Let's log your pranayam session.\n\n"
+        "Use /cancel to cancel anytime."
+    )
+    await update.message.reply_text(
+        "When did you practice?",
+        reply_markup=make_markup(DATE_KEYBOARD)
+    )
+    return DATE
 
 
-def selected_pranayam_date(update: Update, context):
-    logger.info("inside selected pranayam date")
-    chat_data = context.chat_data
-    today = datetime.today().date()
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    if query.data == 'today':
-        chat_data['pranayam_date'] = today
-    elif query.data == 'yday':
-        chat_data['pranayam_date'] = today - timedelta(days=1)
-    elif query.data == 'daybeforeyday':
-        chat_data['pranayam_date'] = today - timedelta(days=2)
-    elif query.data == 'other':
-        update.effective_message.reply_text(
-            "This function is yet to be handled.\n Use /pranayam again to enter recent logs.")  # TODO - handle this
+async def handle_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "other":
+        await query.edit_message_text("Custom date coming soon! Use /pranayam again.")
         return ConversationHandler.END
-    else:
-        update.effective_message.reply_text(
-            "This function is yet to be handled.\n Use /pranayam again to enter recent logs.")  # TODO - handle this
-        return ConversationHandler.END
-    hourwise_keyboard = generate_hour_keyboard()
-    update.callback_query.edit_message_text("Hour of Pranayam exercise?",
-                                            reply_markup=InlineKeyboardMarkup(inline_keyboard=hourwise_keyboard))
-    return PRANAYAM_HOUR
+
+    context.chat_data['pranayam_date'] = parse_date_selection(query.data)
+    await query.edit_message_text("What hour?", reply_markup=make_markup(HOUR_KEYBOARD))
+    return HOUR
 
 
-def selected_pranayam_hour(update: Update, context):
-    logger.info("inside selected pranayam exercise hour")
+async def handle_hour(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    hour = int(query.data)
+    context.chat_data['pranayam_hour'] = hour
+    await query.edit_message_text(
+        "What time exactly?",
+        reply_markup=make_markup(generate_minute_keyboard(hour))
+    )
+    return MINUTE
+
+
+async def handle_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    pranayam_datetime = combine_date_time(context.chat_data['pranayam_date'], query.data)
+    context.chat_data['pranayam_datetime'] = pranayam_datetime
+    await query.edit_message_text(
+        f"Time: {readable_datetime(pranayam_datetime)}\n\nWhat type of pranayam?",
+        reply_markup=make_markup(PRANAYAM_TYPE_KEYBOARD)
+    )
+    return PRANAYAM_TYPE
+
+
+async def handle_pranayam_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    context.chat_data['pranayam_type'] = query.data
+    reps_keyboard = generate_number_keyboard(1, 30, columns=5)
+    await query.edit_message_text(
+        f"Type: {query.data.replace('_', ' ').title()}\n\nHow many rounds/repetitions?",
+        reply_markup=make_markup(reps_keyboard)
+    )
+    return REPS
+
+
+async def handle_reps(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    context.chat_data['pranayam_reps'] = int(query.data)
+    await query.edit_message_text("Any notes? (or /skip)")
+    return NOTES
+
+
+async def handle_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.chat_data['pranayam_notes'] = update.message.text.strip()
+    return await save_pranayam_record(update, context)
+
+
+async def skip_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.chat_data['pranayam_notes'] = ""
+    return await save_pranayam_record(update, context)
+
+
+async def save_pranayam_record(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    chat_id = update.effective_chat.id
     chat_data = context.chat_data
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    hour_got = query.data.strip()
-    logger.info(f'Exercise hour selected -> {hour_got}')
-    keyboard = generate_minute_keyboard(hour=hour_got)
-    chat_data['pranayam_hour'] = hour_got
-    update.callback_query.edit_message_text("Time of Pranayam exercise?",
-                                            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-    return PRANAYAM_MINUTE
 
-
-def selected_minute_for_pranayam(update: Update, context: CallbackContext):
-    logger.info("inside selected pranayam minute")
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    chat_data = context.chat_data
-    date_selected = str(chat_data.get('pranayam_date'))
-    time_selected = query.data.strip()
-    chat_data['pranayam_time'] = time_selected
-    pranayam_datetime = datetime.strptime(date_selected + ' ' + time_selected, '%Y-%m-%d %H:%M')
-    chat_data['pranayam_datetime'] = pranayam_datetime
-    logger.info(f"Selected time for Pranayam -> {pranayam_datetime}")
-    keyboard = generate_pranayam_names_keyboard()
-    update.callback_query.edit_message_text("Select type of Pranayam exercise",
-                              reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-    return PRANAYAM_NAME
-
-
-def selected_pranayamaname(update, context):
-    logger.info("Inside selected pranayam")
-    query: inlinequeryhandler = update.callback_query
-    chat_data = context.chat_data
-    update.callback_query.answer()
-    pranayam_name = query.data.strip()
-    chat_data['pranayam_name'] = pranayam_name
-    pranayam_type = str(chat_data.get('pranayam_name'))
-    chat_data['pranayam_type'] = pranayam_type
-    logger.info(f'Pranayam Exercise Type -> {pranayam_type}')
-    reps_keyboard = generate_repetitions_keyboard()  # sets=sets_got
-    update.callback_query.edit_message_text("Enter repetitions: ",
-                                            reply_markup=InlineKeyboardMarkup(inline_keyboard=reps_keyboard))
-    return PRANAYAM_REPETITION
-
-
-def pranayam_repetition(update, context):
-    logger.info("inside selected repetitions")
-    chat_data = context.chat_data
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    repetition = query.data.strip()
-    logger.info(f'Repetition count -> {repetition}')
-    chat_data['repetition'] = repetition
-    update.callback_query.edit_message_text("Write notes below (else click /skip_notes)")
-    return PRANAYAM_NOTE
-
-
-def pranayam_notes(update, context):
-    chat_data = context.chat_data
-    logger.info('enter pranayam note')
-    query_message_id = update.effective_message.message_id
-    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=query_message_id - 1)
-    ans = update.effective_message.text
-    chat_data['pranayam_notes'] = ans
-    if not chat_data.get('pranayam_notes'):
-        chat_data['pranayam_notes'] = ''
-    update.message.reply_text("Notes added successfully.")
-    save_pranayam_record(update, context)
-    return ConversationHandler.END
-
-def skip_pranayam_notes(update, context):
-    chat_data = context.chat_data
-    query_message_id = update.effective_message.message_id
-    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=query_message_id - 1)
-    chat_data = context.chat_data
-    if not chat_data.get('pranayam_notes'):
-        chat_data['pranayam_notes'] = ''
-    save_pranayam_record(update, context)
-    return ConversationHandler.END
-
-
-def cancelpranayam(update, context):
-    update.effective_message.reply_text('Pranayam command cancelled!')
-    clear_chatdata(context=context)
-    return ConversationHandler.END
-
-
-def save_pranayam_record(update, context):
-    logger.info('Inside Pranayam record')
-    chat_data = context.chat_data
     with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user: User = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            pranayam_datetime = chat_data['pranayam_datetime']
-            pranayam_type = chat_data['pranayam_type']
-            repetition = chat_data['repetition']
-            pranayam_notes = chat_data['pranayam_notes']
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Error: User not found.")
+            clear_chat_data(context)
+            return ConversationHandler.END
 
-            # print(user.id, pranayam_datetime, pranayam_type, repetition, pranayam_notes)
-            pranayam_record: Pranayam = Pranayam(user_id=user.id, pranayam_datetime=pranayam_datetime, pranayam_type=pranayam_type,
-                                     repetition=repetition, pranayam_notes=pranayam_notes, created_at=datetime.now())
-            try:
-                session.add(pranayam_record)
-            except:
-                session.rollback()
-                clear_chatdata(context=context)
-                logger.error(f"Error saving pranayam to database", exc_info=True)
-                update.effective_message.reply_text("Something wrong, please try /pranayam again..")
-            else:
-                session.commit()
-                logger.info(f"Pranayam record added - {pranayam_record}")
-                update.effective_message.reply_text(f"Record added - \n\n"
-                                                    f"<b>At:</b> {readable_datetime(pranayam_record.pranayam_datetime)}\n"
-                                                    f"<b>Type:</b> {pranayam_record.pranayam_type}\n"
-                                                    f"<b>Reps:</b> {pranayam_record.repetition}\n"
-                                                    f"<b>Notes:</b>  {pranayam_record.pranayam_notes if pranayam_record.pranayam_notes else '-'}", parse_mode='HTML')
-                update.effective_message.reply_text(f"Use /mypranayam to check previous records")
-                try:
-                    message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
-                    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
-                except:
-                    clear_chatdata(context=context)
-                    logger.exception("error converting chat_data['message_id_of_letsstart'] to int")
-            clear_chatdata(context=context)
+        record = Pranayam(
+            user_id=user.id,
+            pranayam_datetime=chat_data.get('pranayam_datetime'),
+            pranayam_type=chat_data.get('pranayam_type'),
+            repetition=chat_data.get('pranayam_reps'),
+            pranayam_notes=chat_data.get('pranayam_notes', ''),
+            created_at=datetime.now()
+        )
 
+        try:
+            session.add(record)
+            session.commit()
+            logger.info(f"Pranayam record saved: {record}")
+            await update.effective_message.reply_text(
+                f"Pranayam session logged!\n\n"
+                f"<b>Time:</b> {readable_datetime(record.pranayam_datetime)}\n"
+                f"<b>Type:</b> {record.pranayam_type.replace('_', ' ').title()}\n"
+                f"<b>Reps:</b> {record.repetition}\n"
+                f"<b>Notes:</b> {record.pranayam_notes or '-'}",
+                parse_mode="HTML"
+            )
+            await update.effective_message.reply_text("Use /mypranayam to view your pranayam history.")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error saving pranayam: {e}", exc_info=True)
+            await update.effective_message.reply_text("Error saving. Try /pranayam again.")
+        finally:
+            clear_chat_data(context)
 
-def mypranayam(update: Update, context):
-    with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            if user.pranayams.count():
-                for _id, item in enumerate(user.pranayams.order_by(desc('pranayam_datetime')).all()):
-                    if _id < 5:
-                        if not item.pranayam_notes:
-                            update.effective_message.reply_text(f"<b>{item.pranayam_type}</b> - {item.repetition} times\n"
-                                                                f"{readable_datetime(item.pranayam_datetime)}\n\n", parse_mode='HTML')
-                        else:
-                            update.effective_message.reply_text(f"<b>{item.pranayam_type}</b> - {item.repetition} times\n"
-                                                                f"Notes - {item.pranayam_notes}\n"
-                                                                f"{readable_datetime(item.pranayam_datetime)}\n\n", parse_mode='HTML')
-
-                        # update.effective_message.reply_text(f"{readable_datetime(item.pranayam_datetime)} - {item.pranayam_type} - {item.repetition}")
-            else:
-                update.effective_message.reply_text("You haven't added a single Pranayam exercise record. Use /pranayam to get started")
-
-
-def timeout_pranayam(update, context):
-    update.effective_message.reply_text(f'Exercise command timedout! (timeout limit - {pranayam_timeout_time} sec')
     return ConversationHandler.END
 
 
-def readable_datetime(inputdatetime: datetime):
-    return inputdatetime.strftime('%d %b, %H:%M')
+async def my_pranayam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_message.chat_id
+
+    with Session() as session:
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Please /register first.")
+            return
+
+        records = (
+            session.query(Pranayam)
+            .filter(Pranayam.user_id == user.id)
+            .order_by(desc(Pranayam.pranayam_datetime))
+            .limit(5)
+            .all()
+        )
+
+        if records:
+            for r in records:
+                text = (
+                    f"<b>{r.pranayam_type.replace('_', ' ').title()}</b> - {r.repetition} rounds\n"
+                    f"{readable_datetime(r.pranayam_datetime)}"
+                )
+                if r.pranayam_notes:
+                    text += f"\nNote: {r.pranayam_notes}"
+                await update.effective_message.reply_text(text, parse_mode="HTML")
+        else:
+            await update.effective_message.reply_text("No pranayam records. Use /pranayam to log!")
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info("Pranayam logging cancelled")
+    clear_chat_data(context)
+    await update.effective_message.reply_text("Pranayam logging cancelled.")
+    return ConversationHandler.END
+
+
+async def timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info("Pranayam logging timed out")
+    clear_chat_data(context)
+    await update.effective_message.reply_text("Pranayam logging timed out.")
+    return ConversationHandler.END
 
 
 pranayam_handler = ConversationHandler(
     entry_points=[CommandHandler('pranayam', pranayam)],
     states={
-        PRANAYAM_DATE: [CallbackQueryHandler(selected_pranayam_date, pattern='^today|yday|daybeforeyday|other$')],
-        PRANAYAM_HOUR: [CallbackQueryHandler(selected_pranayam_hour, pattern=generate_pattern_for_pranayam_hour())],
-        PRANAYAM_MINUTE: [CallbackQueryHandler(selected_minute_for_pranayam, pattern=generate_pattern_for_pranayam_minute())],
-        PRANAYAM_NAME: [CallbackQueryHandler(selected_pranayamaname, pattern=generate_pattern_for_pranayam_names())],
-        PRANAYAM_REPETITION: [CallbackQueryHandler(pranayam_repetition, pattern=generate_pattern_for_repetitions())],
-        PRANAYAM_NOTE: [CommandHandler('skip_notes', skip_pranayam_notes),
-                    MessageHandler(Filters.text, pranayam_notes)],
-
-        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_pranayam)]
+        DATE: [CallbackQueryHandler(handle_date, pattern=DATE_PATTERN)],
+        HOUR: [CallbackQueryHandler(handle_hour, pattern=HOUR_PATTERN)],
+        MINUTE: [CallbackQueryHandler(handle_minute, pattern=MINUTE_PATTERN)],
+        PRANAYAM_TYPE: [CallbackQueryHandler(handle_pranayam_type, pattern=PRANAYAM_TYPE_PATTERN)],
+        REPS: [CallbackQueryHandler(handle_reps, pattern="^[0-9]+$")],
+        NOTES: [
+            CommandHandler('skip', skip_notes),
+            CommandHandler('skip_notes', skip_notes),  # Backwards compatibility
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_notes)
+        ],
+        ConversationHandler.TIMEOUT: [MessageHandler(filters.ALL, timeout)]
     },
-    fallbacks=[CommandHandler('cancelpranayam', cancelpranayam)],
-    conversation_timeout=pranayam_timeout_time
+    fallbacks=[
+        CommandHandler('cancel', cancel),
+        CommandHandler('cancelpranayam', cancel),  # Backwards compatibility
+    ],
+    conversation_timeout=TIMEOUT_SECONDS
 )
+
+mypranayam = my_pranayam

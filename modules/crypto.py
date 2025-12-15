@@ -1,127 +1,192 @@
-from telegram.ext import ConversationHandler, CommandHandler, \
-    MessageHandler, Filters
-from dbhelper import Session
-import logging
-from models import User, Crypto
-from modules.getcurrentuser import get_current_user
-from modules.helpers import clear_chatdata
+"""
+Crypto wallet management conversation handler.
+
+Requires python-telegram-bot v21+
+"""
 from datetime import datetime
 
+from telegram import Update
+from telegram.ext import (
+    ConversationHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+)
 
-log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logger = logging.getLogger(__name__)
-logger.setLevel('INFO')
-file_handler = logging.FileHandler("logs/app.log")
-formatter = logging.Formatter(log_format)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+from dbhelper import Session
+from models import User, Crypto
+from modules.getcurrentuser import get_current_user
+from modules.helpers import clear_chat_data
+from utils.logger import get_logger
 
-crypto_timeout_time = 120
-WALLET = range(1)
+logger = get_logger(__name__)
 
-def crypto(update, context):
+# Conversation states
+WALLET = 0
+
+# Configuration
+TIMEOUT_SECONDS = 120
+
+
+async def crypto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for crypto wallet setup."""
     logger.info("Inside crypto")
     chat_id = update.message.chat_id
+
     with Session() as session:
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
+        user = await get_current_user(chat_id, update, context, session)
         if user:
-            # update.message.reply_text("Let's start. (use /cancelthoughts if you want to cancel)")
-            # chat_data = context.chat_data
-            update.message.reply_text("You get rewarded RoutineBotToken for adding your logs. \n\nEnter your wallet (polygon below). Click /idonthavewallet if you don't have one.")
+            await update.message.reply_text(
+                "You get rewarded RoutineBotToken for adding your logs.\n\n"
+                "Enter your wallet (polygon below). Click /idonthavewallet if you don't have one."
+            )
             return WALLET
 
-
-def addwallet(update, context):
-    logger.info('enter your wallet')
-    chat_data = context.chat_data
-    wallet_addr = update.message.text
-    if len(wallet_addr) != 42:
-        update.message.reply_text("Doesn't look like wallet address. Try /crypto again.")
-        return ConversationHandler.END
-    if not chat_data.get('wallet'):
-        chat_data['wallet'] = list()
-    chat_data['wallet'].append(wallet_addr)
-    save_crypto_record(update, context)
     return ConversationHandler.END
 
 
-def save_crypto_record(update, context):
-    logger.info('Inside Crypto record saving')
+async def addwallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle wallet address input."""
+    logger.info("Enter your wallet")
     chat_data = context.chat_data
-    with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user: User = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            wallet = chat_data['wallet']
-            wallet = ",,,".join(wallet)
+    wallet_addr = update.message.text.strip()
 
-            wallet_record: Crypto = Crypto(user_id=user.id, wallet=wallet, created_at=datetime.now())
+    if len(wallet_addr) != 42:
+        await update.message.reply_text(
+            "Doesn't look like wallet address. Try /crypto again."
+        )
+        return ConversationHandler.END
+
+    if not chat_data.get('wallet'):
+        chat_data['wallet'] = []
+    chat_data['wallet'].append(wallet_addr)
+
+    await save_crypto_record(update, context)
+    return ConversationHandler.END
+
+
+async def save_crypto_record(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save crypto wallet record to database."""
+    logger.info("Inside Crypto record saving")
+    chat_data = context.chat_data
+    chat_id = update.effective_chat.id
+
+    with Session() as session:
+        user = User.get_user_by_chat_id(session, chat_id)
+        if user:
+            wallet = chat_data.get('wallet', [])
+            wallet_str = ",,,".join(wallet)
+
+            wallet_record = Crypto(
+                user_id=user.id,
+                wallet=wallet_str,
+                created_at=datetime.now()
+            )
+
             try:
                 session.add(wallet_record)
-            except:
-                session.rollback()
-                clear_chatdata(context=context)
-                logger.error(f"Error saving wallet to database", exc_info=True)
-                update.effective_message.reply_text("Something wrong, please try /crypto again..")
-            else:
                 session.commit()
+
                 logger.info(f"Crypto record added - {wallet_record}")
-                update.effective_message.reply_text(f"Record added - \n\n"
-                                                    f"{wallet_record.wallet}", parse_mode='HTML')
-                update.effective_message.reply_text(f"Use /mycrypto to check previous records")
-                try:
-                    message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
-                    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
-                except:
-                    clear_chatdata(context=context)
-                    logger.exception("error converting chat_data['message_id_of_letsstart'] to int")
-            clear_chatdata(context=context)
+                await update.effective_message.reply_text(
+                    f"Record added -\n\n{wallet_record.wallet}",
+                    parse_mode="HTML"
+                )
+                await update.effective_message.reply_text(
+                    "Use /mycrypto to check previous records"
+                )
+
+                # Try to delete the "let's start" message
+                message_id = chat_data.get('message_id_of_letsstart')
+                if message_id:
+                    try:
+                        await context.bot.delete_message(
+                            chat_id=chat_id,
+                            message_id=int(message_id)
+                        )
+                    except Exception:
+                        logger.exception("Error deleting letsstart message")
+
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Error saving wallet to database: {e}", exc_info=True)
+                await update.effective_message.reply_text(
+                    "Something wrong, please try /crypto again."
+                )
+            finally:
+                clear_chat_data(context)
 
 
-def idonthavewallet(update, context):
-    update.effective_message.reply_text('No worries. Watch this 5 min video on http://cryptochimaru.com and get your own wallet with some test tokens.')
+async def idonthavewallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle users without wallet."""
+    await update.effective_message.reply_text(
+        "No worries. Watch this 5 min video on http://cryptochimaru.com "
+        "and get your own wallet with some test tokens."
+    )
     return ConversationHandler.END
 
 
-def cancelcrypto(update, context):
-    update.effective_message.reply_text('Crypto command cancelled')
+async def cancelcrypto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cancel crypto setup."""
+    await update.effective_message.reply_text("Crypto command cancelled")
     return ConversationHandler.END
 
 
-def timeout_crypto(update, context):
-    update.effective_message.reply_text(f'Crypto command timedout! (timeout limit - {crypto_timeout_time} sec')
+async def timeout_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle conversation timeout."""
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            f"Crypto command timed out! (timeout limit - {TIMEOUT_SECONDS} sec)"
+        )
     return ConversationHandler.END
 
 
-def mycrypto(update, context):
+async def mycrypto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show user's crypto wallets."""
+    chat_id = update.effective_message.chat_id
+
     with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
+        user = await get_current_user(chat_id, update, context, session)
         if user:
             if user.cryptos.count():
-                for _id, item in enumerate(user.cryptos.order_by('wallet').all()):
-                    if _id < 5:
-                        update.effective_message.reply_text(f"{_id}. {item.wallet.replace(',,,', ', ')}")
+                for idx, item in enumerate(user.cryptos.order_by('wallet').all()):
+                    if idx < 5:
+                        await update.effective_message.reply_text(
+                            f"{idx}. {item.wallet.replace(',,,', ', ')}"
+                        )
             else:
-                update.effective_message.reply_text("You haven't added any wallet.\n\nUse /crypto to add wallet.\nUse /idonthavewallet to get tips.")
+                await update.effective_message.reply_text(
+                    "You haven't added any wallet.\n\n"
+                    "Use /crypto to add wallet.\n"
+                    "Use /idonthavewallet to get tips."
+                )
 
 
-def mycryptorewards(update, context):
+async def mycryptorewards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show crypto rewards info."""
     chat_id = update.message.chat_id
+
     with Session() as session:
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
+        user = await get_current_user(chat_id, update, context, session)
         if user:
-            # update.message.reply_text("Let's start. (use /cancelthoughts if you want to cancel)")
-            # chat_data = context.chat_data
-            update.message.reply_text("Your rewards in RoutineBotToken will be shown here. We are working on the logic, but it'll be in relation with your number of daily logs, so keep adding logs and come back here later.")
+            await update.message.reply_text(
+                "Your rewards in RoutineBotToken will be shown here. "
+                "We are working on the logic, but it'll be in relation with "
+                "your number of daily logs, so keep adding logs and come back here later."
+            )
 
 
+# Build the conversation handler
 crypto_handler = ConversationHandler(
     entry_points=[CommandHandler('crypto', crypto)],
     states={
-        WALLET: [MessageHandler(Filters.text and ~Filters.command, addwallet)],
-        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_crypto)]
+        WALLET: [MessageHandler(filters.TEXT & ~filters.COMMAND, addwallet)],
+        ConversationHandler.TIMEOUT: [MessageHandler(filters.ALL, timeout_crypto)]
     },
-    fallbacks=[CommandHandler('idonthavewallet', idonthavewallet)],
-    conversation_timeout=crypto_timeout_time
+    fallbacks=[
+        CommandHandler('idonthavewallet', idonthavewallet),
+        CommandHandler('cancelcrypto', cancelcrypto),
+    ],
+    conversation_timeout=TIMEOUT_SECONDS
 )

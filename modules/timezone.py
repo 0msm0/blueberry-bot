@@ -1,201 +1,298 @@
-from sqlalchemy import desc
-from telegram.ext import CommandHandler, CallbackContext, ConversationHandler, MessageHandler, Filters, CallbackQueryHandler, inlinequeryhandler
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+"""
+Timezone setting conversation handler.
+
+Requires python-telegram-bot v21+
+"""
 from datetime import datetime, timedelta
-from models import User, Timezone
+
+from telegram import Update, InlineKeyboardMarkup
+from telegram.ext import (
+    CommandHandler,
+    ConversationHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes,
+)
+from sqlalchemy import desc
+
 from dbhelper import Session
-import logging
+from models import User, Timezone
+from utils.logger import get_logger
+from utils.keyboards import generate_options_keyboard, make_markup
+from utils.patterns import TIMEZONE_NAME_PATTERN, TIMEZONE_EFFECTIVE_PATTERN
 from modules.getcurrentuser import get_current_user
-from modules.helpers import clear_userdata
-# TODO - DONT ALLOW USER TO SET THE SAME TIMEZONE AGAIN. ie. set_timezone needs to be used only if ZONE IS TO BE CHANGED.
+from modules.helpers import clear_user_data
+
+logger = get_logger(__name__)
+
+# Conversation states
+COUNTRY, TIMEZONE_NAME, EFFECTIVE_FROM = range(3)
+
+# Configuration
+TIMEOUT_SECONDS = 300  # 5 minutes
+
+# Timezone data
+TIMEZONE_DATA = {
+    "Asia/Kolkata": {"country": "India", "offset": "+5:30"},
+    "Europe/London": {"country": "UK", "offset": "+0:00"},
+    "Pacific/Honolulu": {"country": "US", "offset": "-10:00"},
+    "America/Anchorage": {"country": "US", "offset": "-9:00"},
+    "America/Los_Angeles": {"country": "US", "offset": "-8:00"},
+    "America/Denver": {"country": "US", "offset": "-7:00"},
+    "America/Chicago": {"country": "US", "offset": "-6:00"},
+    "America/New_York": {"country": "US", "offset": "-5:00"},
+}
+
+# Country aliases
+COUNTRY_ALIASES = {
+    "india": "india",
+    "uk": "uk",
+    "united kingdom": "uk",
+    "great britain": "uk",
+    "britain": "uk",
+    "us": "us",
+    "usa": "us",
+    "united states": "us",
+    "united states of america": "us",
+    "america": "us",
+}
 
 
-log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logger = logging.getLogger(__name__)
-logger.setLevel('INFO')
-file_handler = logging.FileHandler("logs/app.log")
-formatter = logging.Formatter(log_format)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-set_timezone_timeout = 30
-TZCOUNTRY, TZNAME, TZEFFECTIVEFROM = range(3)
-uk_list = ['uk', 'united kingdom', 'great britain', 'britain']
-us_list = ['us', 'united states', 'united states of america', 'america']
-
-def set_timezone(update, context):
-    with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            update.effective_message.reply_text('Which country do you live in?')
-            return TZCOUNTRY
-
-
-def tzcountry(update, context):
-    user_country = update.effective_message.text.strip()
-    user_data = context.user_data
-    user_data['tzcountry'] = user_country
-    #TODO - IMPROVE THIS LOGIC SOMETIME
-    keyboard = [[]]
-    if user_country.lower() == 'india':
-        keyboard = [[
-            InlineKeyboardButton("Asia/Kolkata", callback_data="Asia/Kolkata"),
-        ]]
-    elif user_country.lower() in uk_list:
-        keyboard = [[
-            InlineKeyboardButton("Europe/London", callback_data="Europe/London"),
-        ]]
-    elif user_country.lower() in us_list:
-        keyboard = [[
-            InlineKeyboardButton("Pacific/Honolulu", callback_data="Pacific/Honolulu"),
-            InlineKeyboardButton("America/Anchorage", callback_data="America/Anchorage"),
-            InlineKeyboardButton("America/Los_Angeles", callback_data="America/Los_Angeles"),
-            InlineKeyboardButton("America/Denver", callback_data="America/Denver"),
-            InlineKeyboardButton("America/Chicago", callback_data="America/Chicago"),
-            InlineKeyboardButton("America/New_York", callback_data="America/New_York"),
-        ]]
+def get_timezone_keyboard(country: str):
+    """Generate timezone keyboard for a specific country."""
+    if country == "india":
+        options = [("Asia/Kolkata (IST)", "Asia/Kolkata")]
+    elif country == "uk":
+        options = [("Europe/London (GMT/BST)", "Europe/London")]
+    elif country == "us":
+        options = [
+            ("Hawaii", "Pacific/Honolulu"),
+            ("Alaska", "America/Anchorage"),
+            ("Pacific", "America/Los_Angeles"),
+            ("Mountain", "America/Denver"),
+            ("Central", "America/Chicago"),
+            ("Eastern", "America/New_York"),
+        ]
     else:
-        update.effective_message.reply_text('Currently, the beta supports only India US UK.\nSet your country as India for now, you can change it later.\nSimply write India below..')
-        return TZCOUNTRY
-    update.effective_message.reply_text("Select timezone", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-    return TZNAME
+        return None
+
+    return generate_options_keyboard(options, columns=2)
 
 
-ALL_TZ_NAMES = ['Asia/Kolkata', 'Europe/London', 'Pacific/Honolulu','America/Anchorage','America/Los_Angeles','America/Denver','America/Chicago','America/New_York',]
-def tzname(update:Update, context):
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    user_data = context.user_data
+async def set_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for timezone setting."""
+    chat_id = update.effective_message.chat_id
 
-    if query.data == 'Asia/Kolkata':
-        user_data['tzcountry'] = 'India'
-        user_data['tzname'] = 'Asia/Kolkata'
-        user_data['tzoffset'] = '+5:30'
-    elif query.data == 'Europe/London':
-        user_data['tzcountry'] = 'UK'
-        user_data['tzname'] = 'Europe/London'
-        user_data['tzoffset'] = '+1:00'
-    elif query.data == 'Pacific/Honolulu':
-        user_data['tzcountry'] = 'US'
-        user_data['tzname'] = 'Pacific/Honolulu'
-        user_data['tzoffset'] = '-10:00'
-    elif query.data == 'America/Anchorage':
-        user_data['tzcountry'] = 'US'
-        user_data['tzname'] = 'America/Anchorage'
-        user_data['tzoffset'] = '-9:00'
-    elif query.data == 'America/Los_Angeles':
-        user_data['tzcountry'] = 'US'
-        user_data['tzname'] = 'America/Los_Angeles'
-        user_data['tzoffset'] = '-8:00'
-    elif query.data == 'America/Denver':
-        user_data['tzcountry'] = 'US'
-        user_data['tzname'] = 'America/Denver'
-        user_data['tzoffset'] = '-7:00'
-    elif query.data == 'America/Chicago':
-        user_data['tzcountry'] = 'US'
-        user_data['tzname'] = 'America/Chicago'
-        user_data['tzoffset'] = '-6:00'
-    elif query.data == 'America/New_York':
-        user_data['tzcountry'] = 'US'
-        user_data['tzname'] = 'America/New_York'
-        user_data['tzoffset'] = '-5:00'
-    keyboard = [[
-            InlineKeyboardButton("Since First Day", callback_data='sincefirstday'),
-            InlineKeyboardButton("Yesterday", callback_data='yesterday'),
-            InlineKeyboardButton("Today", callback_data='today'),
-        ]]
-    update.callback_query.edit_message_text("Since when do you want to set this timezone", reply_markup=InlineKeyboardMarkup(keyboard))
-    return TZEFFECTIVEFROM
+    with Session() as session:
+        user = await get_current_user(chat_id, update, context, session)
+        if not user:
+            return ConversationHandler.END
+
+    await update.effective_message.reply_text(
+        "Let's set your timezone.\n\n"
+        "Which country do you live in?\n"
+        "(Currently supported: India, UK, US)\n\n"
+        "Use /cancel to cancel."
+    )
+    return COUNTRY
 
 
-def tzeffectivefrom(update, context):
+async def handle_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle country input."""
+    country_input = update.effective_message.text.strip().lower()
+
+    country = COUNTRY_ALIASES.get(country_input)
+
+    if not country:
+        await update.effective_message.reply_text(
+            "Sorry, we currently support only India, UK, and US.\n\n"
+            "Please enter one of these countries:"
+        )
+        return COUNTRY
+
+    context.user_data['country'] = country
+
+    keyboard = get_timezone_keyboard(country)
+    if keyboard:
+        await update.effective_message.reply_text(
+            "Select your timezone:",
+            reply_markup=make_markup(keyboard)
+        )
+        return TIMEZONE_NAME
+    else:
+        await update.effective_message.reply_text(
+            "Error getting timezones. Please try again with /set_timezone"
+        )
+        return ConversationHandler.END
+
+
+async def handle_timezone_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle timezone selection."""
     query = update.callback_query
-    update.callback_query.answer()
+    await query.answer()
+
+    tz_name = query.data
+    tz_data = TIMEZONE_DATA.get(tz_name)
+
+    if not tz_data:
+        await query.edit_message_text("Invalid timezone. Please try again with /set_timezone")
+        return ConversationHandler.END
+
+    context.user_data['timezone_name'] = tz_name
+    context.user_data['timezone_offset'] = tz_data['offset']
+
+    effective_options = [
+        ("Since Registration", "sincefirstday"),
+        ("Yesterday", "yesterday"),
+        ("Today", "today"),
+    ]
+    keyboard = generate_options_keyboard(effective_options, columns=3)
+
+    await query.edit_message_text(
+        f"Timezone: {tz_name}\n\n"
+        "Since when should this timezone be effective?",
+        reply_markup=make_markup(keyboard)
+    )
+    return EFFECTIVE_FROM
+
+
+async def handle_effective_from(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle effective from selection and save timezone."""
+    query = update.callback_query
+    await query.answer()
+
+    selection = query.data
+    context.user_data['effective_selection'] = selection
+
+    return await save_timezone(update, context)
+
+
+async def save_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save timezone to database."""
+    chat_id = update.effective_chat.id
     user_data = context.user_data
-    if query.data == 'sincefirstday':
-        user_data['tzeffectivefrom'] = 'sincefirstday'
-    elif query.data == 'yesterday':
-        user_data['tzeffectivefrom'] = 'yesterday'
-    elif query.data == 'today':
-        user_data['tzeffectivefrom'] = 'today'
-    save_timezone_records(update, context)
-    return ConversationHandler.END
+    today = datetime.today().date()
 
-
-def save_timezone_records(update:Update, context: CallbackContext):
     with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user: User = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            user_data = context.user_data
-            today = datetime.today().date()
-            try:
-                if user_data['tzeffectivefrom'] == 'sincefirstday':
-                    tzeffectivefrom_date = user.created_at.date()
-                elif user_data['tzeffectivefrom'] == 'yesterday':
-                    tzeffectivefrom_date = today - timedelta(days=1)
-                elif user_data['tzeffectivefrom'] == 'today':
-                    tzeffectivefrom_date = today
-                else:
-                    tzeffectivefrom_date = user.created_at.date()
-            except:
-                tzeffectivefrom_date = user.created_at.date()
-                pass
-            mytimezone = Timezone(user_id=user.id, timezone_name=user_data['tzname'], timezone_offset=user_data['tzoffset'],
-                            effective_from=tzeffectivefrom_date, created_at=datetime.now())
-            try:
-                session.add(mytimezone)
-            except:
-                session.rollback()
-                clear_userdata(context=context)
-                logger.error(f"Error saving timezone", exc_info=True)
-                update.effective_message.reply_text("Something wrong, please try /set_timezone again..")
-            else:
-                session.commit()
-                logger.info(f"Timezone record added - {mytimezone}")
-                update.effective_message.reply_text(f"Awesome, your timezone is all set -> \n\n"
-                                          f"Tz name: {mytimezone.timezone_name}\n"
-                                          f"Tz offset: {mytimezone.timezone_offset}\n"
-                                          f"Tz effective from:  {mytimezone.effective_from}")
-                update.effective_message.reply_text("Cool, you are all set! Use /wakesleep /food to get started!\nUse / to populate list of commands.")
-                clear_userdata(context=context)
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Error: User not found. Please /register first.")
+            clear_user_data(context)
+            return ConversationHandler.END
+
+        # Determine effective date
+        selection = user_data.get('effective_selection', 'today')
+        if selection == 'sincefirstday':
+            effective_date = user.created_at.date()
+        elif selection == 'yesterday':
+            effective_date = today - timedelta(days=1)
+        else:
+            effective_date = today
+
+        timezone = Timezone(
+            user_id=user.id,
+            timezone_name=user_data['timezone_name'],
+            timezone_offset=user_data['timezone_offset'],
+            effective_from=effective_date,
+            created_at=datetime.now()
+        )
+
+        try:
+            session.add(timezone)
+            session.commit()
+
+            logger.info(f"Timezone saved for user {user.id}: {timezone}")
+
+            # Delete the selection message
+            if update.callback_query:
+                await update.callback_query.edit_message_text(
+                    f"Timezone set successfully!\n\n"
+                    f"<b>Timezone:</b> {timezone.timezone_name}\n"
+                    f"<b>Offset:</b> {timezone.timezone_offset}\n"
+                    f"<b>Effective from:</b> {timezone.effective_from}\n\n"
+                    f"You're all set! Use /sleep or /food to start logging.",
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error saving timezone: {e}", exc_info=True)
+            await update.effective_message.reply_text(
+                "Error saving timezone. Please try again with /set_timezone"
+            )
+        finally:
+            clear_user_data(context)
+
+    return ConversationHandler.END
 
 
-def mytimezone(update, context):
+async def my_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show user's timezone history."""
+    chat_id = update.effective_message.chat_id
+
     with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            if user.timezones.count():
-                for _id, item in enumerate(user.timezones.order_by(desc('created_at')).all()):
-                    update.effective_message.reply_text(f"Timezone <b>{item.timezone_name}</b> set since <b>{item.effective_from}</b>", parse_mode='HTML')
-                # nl = '\n'
-                # update.effective_message.reply_text([(item.timezone_name, str(item.effective_from)) for item in user.timezones.all()])
-            else:
-                update.effective_message.reply_text("You haven't added any timezone. You need to /set_timezone before you start logging.")
+        user = await get_current_user(chat_id, update, context, session)
+        if not user:
+            return
+
+        if user.timezones.count():
+            messages = []
+            for tz in user.timezones.order_by(desc(Timezone.created_at)).all():
+                messages.append(
+                    f"<b>{tz.timezone_name}</b> (since {tz.effective_from})"
+                )
+            await update.effective_message.reply_text(
+                "Your timezone settings:\n\n" + "\n".join(messages),
+                parse_mode="HTML"
+            )
+        else:
+            await update.effective_message.reply_text(
+                "You haven't set a timezone yet. Use /set_timezone to set one."
+            )
 
 
-def timeout_timezone(update, context):
-    update.effective_message.reply_text(f'Set Timezone command timed out!')
-    logger.info("Setting timezone timed out")
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cancel timezone setting."""
+    logger.info("Timezone setting cancelled")
+    clear_user_data(context)
+    await update.effective_message.reply_text("Timezone setting cancelled.")
     return ConversationHandler.END
 
-def cancel_timezone(update, context):
-    update.effective_message.reply_text(f'Set Timezone command cancelled!')
-    logger.info("Setting timezone cancelled")
+
+async def timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle conversation timeout."""
+    logger.info("Timezone setting timed out")
+    clear_user_data(context)
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            "Timezone setting timed out. Please use /set_timezone to try again."
+        )
     return ConversationHandler.END
 
 
-# if __name__ == '__main__':
+# Build the conversation handler
 set_timezone_handler = ConversationHandler(
     entry_points=[CommandHandler('set_timezone', set_timezone)],
     states={
-        TZCOUNTRY: [MessageHandler(Filters.text, tzcountry)],
-        TZNAME: [CallbackQueryHandler(tzname, pattern='^' + '|'.join(ALL_TZ_NAMES) + '$')],
-        TZEFFECTIVEFROM: [CallbackQueryHandler(tzeffectivefrom, pattern='^sincefirstday|yesterday|today$')],
-        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_timezone)]
+        COUNTRY: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_country)
+        ],
+        TIMEZONE_NAME: [
+            CallbackQueryHandler(handle_timezone_selection, pattern=TIMEZONE_NAME_PATTERN)
+        ],
+        EFFECTIVE_FROM: [
+            CallbackQueryHandler(handle_effective_from, pattern=TIMEZONE_EFFECTIVE_PATTERN)
+        ],
+        ConversationHandler.TIMEOUT: [
+            MessageHandler(filters.ALL, timeout)
+        ]
     },
-    fallbacks=[CommandHandler('cancel_timezone', cancel_timezone)],
-    conversation_timeout=set_timezone_timeout
+    fallbacks=[
+        CommandHandler('cancel', cancel),
+        CommandHandler('cancel_timezone', cancel),  # Backwards compatibility
+    ],
+    conversation_timeout=TIMEOUT_SECONDS
 )
+
+# Export for main.py
+mytimezone = my_timezone

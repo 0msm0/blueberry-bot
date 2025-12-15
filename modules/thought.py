@@ -1,123 +1,194 @@
-from telegram.ext import ConversationHandler, CommandHandler, \
-    MessageHandler, Filters
-from dbhelper import Session
-import logging
-from models import User, Thoughts
-from modules.getcurrentuser import get_current_user
-from modules.helpers import clear_chatdata
+"""
+Thoughts/journaling conversation handler.
+Requires python-telegram-bot v21+
+"""
 from datetime import datetime
 
-
-log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logger = logging.getLogger(__name__)
-logger.setLevel('INFO')
-file_handler = logging.FileHandler("logs/app.log")
-formatter = logging.Formatter(log_format)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-thought_timeout_time = 120
-THOUGHTS = range(1)
-
-def thoughts(update, context):
-    logger.info("Inside thoughts")
-    chat_id = update.message.chat_id
-    with Session() as session:
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            # update.message.reply_text("Let's start. (use /cancelthoughts if you want to cancel)")
-            # chat_data = context.chat_data
-            update.message.reply_text("Write your Thoughts. \n\nclick /cancelthought to cancel\nclick /donethought after writing")
-            return THOUGHTS
-
-
-def add_thoughts(update, context):
-    logger.info('enter your thoughts')
-    chat_data = context.chat_data
-    thought = update.message.text
-    if not chat_data.get('thoughts'):
-        chat_data['thoughts'] = list()
-    chat_data['thoughts'].append(thought)
-    return THOUGHTS
-
-
-def done_thought(update, context):
-    chat_data = context.chat_data
-    if not chat_data.get('thoughts'):
-        len_of_thoughts = 0
-        update.message.reply_text("Atleast one thought is needed, use /donethought once done")
-        return THOUGHTS
-    else:
-        len_of_thoughts = len(chat_data['thoughts'])
-    message_id_of_donethoughts = update.message.message_id - len_of_thoughts - 1
-    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_donethoughts)
-    save_thoughts_record(update, context)
-    return ConversationHandler.END
-
-
-def save_thoughts_record(update, context):
-    logger.info('Inside Thoughts record')
-    chat_data = context.chat_data
-    with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user: User = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            thoughts = chat_data['thoughts']
-            thoughts = ",,,".join(thoughts)
-
-            thoughts_record: Thoughts = Thoughts(user_id=user.id, thoughts=thoughts, created_at=datetime.now())
-            try:
-                session.add(thoughts_record)
-            except:
-                session.rollback()
-                clear_chatdata(context=context)
-                logger.error(f"Error saving thoughts to database", exc_info=True)
-                update.effective_message.reply_text("Something wrong, please try /thought again..")
-            else:
-                session.commit()
-                logger.info(f"Thoughts record added - {thoughts_record}")
-                update.effective_message.reply_text(f"Record added - \n\n"
-                                                    f"{thoughts_record.thoughts}", parse_mode='HTML')
-                update.effective_message.reply_text(f"Use /mythought to check previous records")
-                try:
-                    message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
-                    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
-                except:
-                    clear_chatdata(context=context)
-                    logger.exception("error converting chat_data['message_id_of_letsstart'] to int")
-            clear_chatdata(context=context)
-
-
-def cancelthought(update, context):
-    update.effective_message.reply_text('Thought command cancelled!')
-    return ConversationHandler.END
-
-
-def timeout_thought(update, context):
-    update.effective_message.reply_text(f'Thought command timedout! (timeout limit - {thought_timeout_time} sec')
-    return ConversationHandler.END
-
-
-def mythought(update, context):
-    with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            if user.thoughts.count():
-                for _id, item in enumerate(user.thoughts.order_by('thoughts').all()):
-                    if _id < 5:
-                        update.effective_message.reply_text(f"{_id}. {item.thoughts.replace(',,,', ', ')}")
-            else:
-                update.effective_message.reply_text("You haven't added a single thoughts record. Use /thoughts to get started")
-
-
-thoughts_handler = ConversationHandler(
-    entry_points=[CommandHandler('thought', thoughts)],
-    states={
-        THOUGHTS: [CommandHandler('donethought', done_thought),
-                    MessageHandler(Filters.text and ~Filters.command, add_thoughts)],
-        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_thought)]
-    },
-    fallbacks=[CommandHandler('cancelthought', cancelthought)],
-    conversation_timeout=thought_timeout_time
+from telegram import Update
+from telegram.ext import (
+    CommandHandler,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
 )
+from sqlalchemy import desc
+
+from dbhelper import Session
+from models import User, Thought
+from utils.logger import get_logger
+from utils.formatters import readable_datetime, join_items, display_items
+from modules.getcurrentuser import get_current_user
+from modules.helpers import clear_chat_data, append_to_chat_data_list
+
+logger = get_logger(__name__)
+
+# Conversation states
+WRITING = 0
+
+# Configuration
+TIMEOUT_SECONDS = 300  # 5 minutes for journaling
+MAX_LENGTH = 2000
+
+
+async def thought(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for thought/journal logging."""
+    chat_id = update.message.chat_id
+
+    with Session() as session:
+        user = await get_current_user(chat_id, update, context, session)
+        if not user:
+            return ConversationHandler.END
+
+    context.chat_data.clear()
+    await update.message.reply_text(
+        "Write your thoughts.\n\n"
+        "Send multiple messages if needed.\n"
+        "Use /done when finished or /cancel to cancel."
+    )
+    return WRITING
+
+
+async def handle_thought(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle thought input."""
+    text = update.message.text.strip()
+
+    if len(text) > MAX_LENGTH:
+        await update.message.reply_text(f"Message too long (max {MAX_LENGTH} chars). Please shorten it.")
+        return WRITING
+
+    append_to_chat_data_list(context, 'thoughts', text)
+    preview = text[:50] + "..." if len(text) > 50 else text
+    await update.message.reply_text(f"✓ Saved: \"{preview}\"\n\nContinue writing or /done to finish.")
+    return WRITING
+
+
+async def done_thought(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Finish adding thoughts."""
+    thoughts = context.chat_data.get('thoughts', [])
+
+    if not thoughts:
+        await update.message.reply_text("Please write at least one thought.")
+        return WRITING
+
+    return await save_thought_record(update, context)
+
+
+async def save_thought_record(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save thought record to database."""
+    chat_id = update.effective_chat.id
+    chat_data = context.chat_data
+
+    with Session() as session:
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Error: User not found.")
+            clear_chat_data(context)
+            return ConversationHandler.END
+
+        content = join_items(chat_data.get('thoughts', []))
+
+        record = Thought(
+            user_id=user.id,
+            content=content,
+            created_at=datetime.now()
+        )
+
+        try:
+            session.add(record)
+            session.commit()
+
+            logger.info(f"Thought record saved: {record}")
+
+            preview = content[:200] + "..." if len(content) > 200 else content
+            await update.effective_message.reply_text(
+                f"Thought saved!\n\n"
+                f"<b>Time:</b> {readable_datetime(record.created_at)}\n"
+                f"<b>Content:</b> {display_items(content)}",
+                parse_mode="HTML"
+            )
+            await update.effective_message.reply_text(
+                "Use /mythoughts to view your journal."
+            )
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error saving thought: {e}", exc_info=True)
+            await update.effective_message.reply_text(
+                "Error saving thought. Please try /thought again."
+            )
+        finally:
+            clear_chat_data(context)
+
+    return ConversationHandler.END
+
+
+async def my_thoughts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show user's thought history."""
+    chat_id = update.effective_message.chat_id
+
+    with Session() as session:
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Please /register first.")
+            return
+
+        records = (
+            session.query(Thought)
+            .filter(Thought.user_id == user.id)
+            .order_by(desc(Thought.created_at))
+            .limit(5)
+            .all()
+        )
+
+        if records:
+            await update.effective_message.reply_text("<b>Recent thoughts:</b>\n", parse_mode="HTML")
+            for i, record in enumerate(records, 1):
+                content = display_items(record.content)
+                preview = content[:150] + "..." if len(content) > 150 else content
+                await update.effective_message.reply_text(
+                    f"{i}. {readable_datetime(record.created_at)}\n{preview}"
+                )
+        else:
+            await update.effective_message.reply_text(
+                "No thoughts recorded yet. Use /thought to start journaling!"
+            )
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cancel thought logging."""
+    logger.info("Thought logging cancelled")
+    clear_chat_data(context)
+    await update.effective_message.reply_text("Thought logging cancelled.")
+    return ConversationHandler.END
+
+
+async def timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle conversation timeout."""
+    logger.info("Thought logging timed out")
+    clear_chat_data(context)
+    await update.effective_message.reply_text(
+        "Thought logging timed out. Please use /thought to try again."
+    )
+    return ConversationHandler.END
+
+
+# Build the conversation handler
+thoughts_handler = ConversationHandler(
+    entry_points=[CommandHandler('thought', thought)],
+    states={
+        WRITING: [
+            CommandHandler('done', done_thought),
+            CommandHandler('donethought', done_thought),  # Backwards compatibility
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_thought)
+        ],
+        ConversationHandler.TIMEOUT: [MessageHandler(filters.ALL, timeout)]
+    },
+    fallbacks=[
+        CommandHandler('cancel', cancel),
+        CommandHandler('cancelthought', cancel),  # Backwards compatibility
+    ],
+    conversation_timeout=TIMEOUT_SECONDS
+)
+
+# Export for main.py
+mythought = my_thoughts

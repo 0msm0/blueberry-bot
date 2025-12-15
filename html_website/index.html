@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blueberry Bot - Your Daily Wellness Companion</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Floating particles background -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <span class="logo-icon">🫐</span>
+                <span class="logo-text">Blueberry</span>
+            </div>
+            <a href="https://t.me/YourBlueberryBot" target="_blank" class="nav-cta">Start Now</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container hero-container">
+        <div class="hero-content">
+            <div class="hero-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 6px;">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                </svg>
+                Telegram Bot for Wellness
+            </div>
+            <h1 class="hero-title">
+                Take Control of Your
+                <span class="gradient-text">Daily Life</span>
+            </h1>
+            <p class="hero-subtitle">
+                Track sleep, meals, workouts, gratitude & more. Build positive habits.
+                Let AI be your coach for keeping your lifestyle on track.
+            </p>
+            <div class="hero-cta">
+                <a href="https://t.me/YourBlueberryBot" target="_blank" class="btn btn-primary">
+                    <span>Open in Telegram</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                    </svg>
+                </a>
+                <a href="#features" class="btn btn-secondary">See Features</a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-number" data-target="10">0</span>
+                    <span class="stat-label">Tracking Areas</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number" data-target="4">0</span>
+                    <span class="stat-label">Daily Prompts</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">AI</span>
+                    <span class="stat-label">Powered</span>
+                </div>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="chat-message bot">
+                        <span>Good morning! What are 3 things you're grateful for today?</span>
+                    </div>
+                    <div class="chat-message user">
+                        <span>My health, my family, this beautiful day</span>
+                    </div>
+                    <div class="chat-message bot">
+                        <span>Beautiful! Your gratitude has been saved. Keep shining!</span>
+                    </div>
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Everything You Need to <span class="gradient-text">Thrive</span></h2>
+                <p class="section-subtitle">Simple commands. Powerful habits. Real transformation.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card" data-aos="fade-up">
+                    <div class="feature-icon">😴</div>
+                    <h3>Sleep Tracking</h3>
+                    <p>Log sleep & wake times. Understand your patterns. Wake up refreshed.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="100">
+                    <div class="feature-icon">🥗</div>
+                    <h3>Meal Logging</h3>
+                    <p>Track what you eat. Build awareness. Make better food choices.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="200">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI Coach</h3>
+                    <p>Get personalized insights. AI-powered motivation to keep you on track.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="300">
+                    <div class="feature-icon">💪</div>
+                    <h3>Workout Log</h3>
+                    <p>Track gym sessions, yoga, pranayam. Celebrate every rep.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="400">
+                    <div class="feature-icon">🙏</div>
+                    <h3>Daily Gratitude</h3>
+                    <p>Start with gratitude. Shift your mindset. Attract positivity.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="500">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Goals & North Star</h3>
+                    <p>Set wellness goals. Stay focused. Achieve what matters.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="600">
+                    <div class="feature-icon">✨</div>
+                    <h3>Affirmations</h3>
+                    <p>Daily positive affirmations. Rewire your thoughts. Believe in yourself.</p>
+                </div>
+
+                <div class="feature-card" data-aos="fade-up" data-delay="700">
+                    <div class="feature-icon">📊</div>
+                    <h3>Daily Rundown</h3>
+                    <p>Quick check-ins. See your progress. Stay accountable.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Simple as <span class="gradient-text">1-2-3</span></h2>
+                <p class="section-subtitle">No apps to download. Just open Telegram and start chatting.</p>
+            </div>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Open Telegram</h3>
+                        <p>Click the button below and open Blueberry Bot in Telegram</p>
+                    </div>
+                </div>
+
+                <div class="step-connector"></div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Say Hello</h3>
+                        <p>Type /start and register with your name in seconds</p>
+                    </div>
+                </div>
+
+                <div class="step-connector"></div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Start Tracking</h3>
+                        <p>Use simple commands like /sleep, /food, /gratitude to log your day</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Transformation Section -->
+    <section class="transformation">
+        <div class="container">
+            <div class="transform-content">
+                <h2 class="transform-title">
+                    From Chaos to <span class="gradient-text">Clarity</span>
+                </h2>
+                <div class="transform-grid">
+                    <div class="transform-before">
+                        <h4>Without Blueberry</h4>
+                        <ul>
+                            <li>Inconsistent sleep schedule</li>
+                            <li>No workout accountability</li>
+                            <li>Negative thought patterns</li>
+                            <li>No clear wellness goals</li>
+                            <li>Days blending together</li>
+                        </ul>
+                    </div>
+                    <div class="transform-arrow">→</div>
+                    <div class="transform-after">
+                        <h4>With Blueberry</h4>
+                        <ul>
+                            <li>Quality sleep, every night</li>
+                            <li>Fitness goals on track</li>
+                            <li>Gratitude-filled mindset</li>
+                            <li>AI-powered guidance</li>
+                            <li>Every day counts</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonial/Quote Section -->
+    <section class="quote-section">
+        <div class="container">
+            <blockquote class="main-quote">
+                <p>"Small daily improvements over time lead to stunning results."</p>
+                <cite>— Robin Sharma</cite>
+            </blockquote>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="final-cta">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Ready to Transform Your Life?</h2>
+                <p>Join thousands building better habits, one message at a time.</p>
+                <a href="https://t.me/YourBlueberryBot" target="_blank" class="btn btn-primary btn-large">
+                    <span>Launch Blueberry Bot</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                    </svg>
+                </a>
+                <p class="cta-note">Free forever. No credit card required.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-icon">🫐</span>
+                    <span>Blueberry Bot</span>
+                </div>
+                <p class="footer-tagline">Your daily wellness companion on Telegram</p>
+                <p class="footer-copy">&copy; 2024 Blueberry Bot. Made with 💜</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

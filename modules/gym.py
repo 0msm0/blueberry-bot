@@ -1,468 +1,358 @@
-from sqlalchemy import desc
-import os
-from telegram.ext import ConversationHandler, inlinequeryhandler, CallbackContext, CallbackQueryHandler, CommandHandler, \
-    MessageHandler, Filters
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, constants
+"""
+Gym workout tracking conversation handler.
+Requires python-telegram-bot v21+
+"""
+from datetime import datetime
+
 from telegram import Update
+from telegram.ext import (
+    CommandHandler,
+    ConversationHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes,
+)
+from sqlalchemy import desc
+
 from dbhelper import Session
-import logging
-
 from models import User, Gym
-from modules.getcurrentuser import get_current_user
-from modules.helpers import clear_chatdata
-from datetime import datetime, timedelta
-import requests
+from utils.logger import get_logger
+from utils.keyboards import (
+    generate_minute_keyboard,
+    generate_number_keyboard,
+    make_markup,
+    DATE_KEYBOARD,
+    HOUR_KEYBOARD,
+    GYM_TYPE_KEYBOARD,
+)
+from utils.patterns import (
+    DATE_PATTERN,
+    HOUR_PATTERN,
+    MINUTE_PATTERN,
+    GYM_TYPE_PATTERN,
+    SETS_PATTERN,
+    REPS_PATTERN,
+    WEIGHT_PATTERN,
+)
+from utils.formatters import (
+    readable_datetime,
+    parse_date_selection,
+    combine_date_time,
+)
+from modules.getcurrentuser import get_user_with_timezone
+from modules.helpers import clear_chat_data, append_to_chat_data_list
 
-log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logger = logging.getLogger(__name__)
-logger.setLevel('INFO')
-file_handler = logging.FileHandler("logs/app.log")
-formatter = logging.Formatter(log_format)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+logger = get_logger(__name__)
 
-gym_timeout_time = 120
-GYM_DATE, GYM_HOUR, GYM_MINUTE, GYM_NAME, GYM_SET, GYM_WEIGHT, GYM_REPETITION, GYM_NOTE = range(8)
-minutes_list = [00, 10, 20, 30, 40, 50]
-gym_names = ['Biceps', 'Calf Raise', 'Chest', 'Deadlift', 'Planks', 'Pullups', 'Pushups', 'Shoulder', 'Shrugs', 'Squats', 'Triceps', 'Other']
+# Conversation states
+DATE, HOUR, MINUTE, EXERCISE_TYPE, SETS, REPS, WEIGHT, NOTES = range(8)
 
-def generate_gym_names_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 4
-    no_of_keys_in_row = 0
-
-    for item in gym_names:
-        key = InlineKeyboardButton(f"{item}", callback_data=str(item).lower())
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())  # [[01,12,23,34]]
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)
-        no_of_keys_in_row += 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_pattern_for_gym_names():
-    temp = ''
-    for item in gym_names:
-        temp += str(item).lower() + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
+# Configuration
+TIMEOUT_SECONDS = 180
 
 
-def generate_date_keyboard():
-    keyboard = [[
-        InlineKeyboardButton("today", callback_data="today"),
-        InlineKeyboardButton("yday", callback_data="yday"),
-        InlineKeyboardButton("daybeforeyday", callback_data="daybeforeyday"),
-        InlineKeyboardButton("other", callback_data="other"),  # TODO - Handle this
-    ]]
-    return keyboard
-
-def generate_hour_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 4
-    no_of_keys_in_row = 0
-
-    for hour in range(24):
-        key = InlineKeyboardButton(f"{hour}-{hour + 1}", callback_data=str(hour))
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())  # [[01,12,23,34]]
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)  # 0-1, 1-2, 2-3, 3-4  # 4-5
-        no_of_keys_in_row += 1  # 1,2, 3, 4, 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_minute_keyboard(hour):
-    minutes_to_show = [str(hour) + ':' + str(round(minute, 2)) for minute in
-                       minutes_list]  # TODO - should show 9:00 instead of 9:0
-    keys = []
-    for item in minutes_to_show:
-        key = InlineKeyboardButton(f"{item}", callback_data=str(item))
-        keys.append(key)
-    final_minutes_keyboard = [keys]
-    return final_minutes_keyboard
-
-
-def generate_set_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 5
-    no_of_keys_in_row = 0
-    for set in range(1,6):
-        key = InlineKeyboardButton(f"{set}", callback_data=str(set))
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)
-        no_of_keys_in_row += 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_repetitions_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 5
-    no_of_keys_in_row = 0
-    for repetition in range(1,16):
-        key = InlineKeyboardButton(f"{repetition}", callback_data=str(repetition))
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)
-        no_of_keys_in_row += 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_weight_keyboard():
-    super_keys = []
-    keys = []
-    rowlimit = 5
-    no_of_keys_in_row = 0
-    for weight in range(1,16):
-        key = InlineKeyboardButton(f"{weight} kg", callback_data=str(weight))
-        if no_of_keys_in_row == rowlimit:
-            super_keys.append(keys.copy())
-            keys.clear()
-            no_of_keys_in_row = 0
-        keys.append(key)
-        no_of_keys_in_row += 1
-    super_keys.append(keys.copy())
-    return super_keys
-
-
-def generate_pattern_for_gym_hour():
-    temp = ''
-    for hour in range(24):
-        temp += str(hour) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def generate_pattern_for_gym_minute():
-    temp = ''
-    for hour in range(24):
-        for minute in minutes_list:
-            temp += str(hour) + ':' + str(minute) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def generate_pattern_for_set():
-    temp = ''
-    for set in range(1,5):
-        temp += str(set) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def generate_pattern_for_repetitions():
-    temp = ''
-    for repetition in range(1,16):
-        temp += str(repetition) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-def generate_pattern_for_weights():
-    temp = ''
-    for weight in range(1,16):
-        temp += str(weight) + '|'
-    temp = temp[:-1]
-    final_pattern = '^' + temp + '$'
-    return final_pattern
-
-
-
-
-
-def gym(update, context):
-    logger.info("Inside gym")
+async def gym(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for gym logging."""
     chat_id = update.message.chat_id
+
     with Session() as session:
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            if user.timezones.count():
-                keyboard = generate_date_keyboard()
-                update.message.reply_text("Let's start. (use /cancelgym if you want to cancel)")
-                update.message.reply_text("Date of Gym Exercise?",
-                                          reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-                query_message_id = update.message.message_id + 1
-                chat_data = context.chat_data
-                chat_data['message_id_of_letsstart'] = query_message_id
-                return GYM_DATE
+        user = await get_user_with_timezone(chat_id, update, context, session)
+        if not user:
+            return ConversationHandler.END
+
+    context.chat_data.clear()
+    await update.message.reply_text(
+        "Let's log your workout.\n\n"
+        "Use /cancel to cancel anytime."
+    )
+    await update.message.reply_text(
+        "When did you work out?",
+        reply_markup=make_markup(DATE_KEYBOARD)
+    )
+    return DATE
 
 
-def selected_gym_date(update: Update, context):
-    logger.info("inside selected gym date")
-    chat_data = context.chat_data
-    today = datetime.today().date()
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    if query.data == 'today':
-        chat_data['gym_date'] = today
-    elif query.data == 'yday':
-        chat_data['gym_date'] = today - timedelta(days=1)
-    elif query.data == 'daybeforeyday':
-        chat_data['gym_date'] = today - timedelta(days=2)
-    elif query.data == 'other':
-        update.effective_message.reply_text(
-            "This function is yet to be handled.\n Use /gym again to enter recent logs.")  # TODO - handle this
+async def handle_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle date selection."""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "other":
+        await query.edit_message_text(
+            "Custom date selection coming soon!\n"
+            "Please use /gym again and select a recent date."
+        )
         return ConversationHandler.END
+
+    context.chat_data['gym_date'] = parse_date_selection(query.data)
+
+    await query.edit_message_text(
+        "What hour?",
+        reply_markup=make_markup(HOUR_KEYBOARD)
+    )
+    return HOUR
+
+
+async def handle_hour(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle hour selection."""
+    query = update.callback_query
+    await query.answer()
+
+    hour = int(query.data)
+    context.chat_data['gym_hour'] = hour
+
+    minute_keyboard = generate_minute_keyboard(hour)
+    await query.edit_message_text(
+        "What time exactly?",
+        reply_markup=make_markup(minute_keyboard)
+    )
+    return MINUTE
+
+
+async def handle_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle minute selection."""
+    query = update.callback_query
+    await query.answer()
+
+    time_str = query.data
+    gym_datetime = combine_date_time(
+        context.chat_data['gym_date'],
+        time_str
+    )
+    context.chat_data['gym_datetime'] = gym_datetime
+
+    await query.edit_message_text(
+        f"Time: {readable_datetime(gym_datetime)}\n\n"
+        "What exercise did you do?",
+        reply_markup=make_markup(GYM_TYPE_KEYBOARD)
+    )
+    return EXERCISE_TYPE
+
+
+async def handle_exercise_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle exercise type selection."""
+    query = update.callback_query
+    await query.answer()
+
+    context.chat_data['gym_type'] = query.data
+
+    sets_keyboard = generate_number_keyboard(1, 10, columns=5)
+    await query.edit_message_text(
+        f"Exercise: {query.data.replace('_', ' ').title()}\n\n"
+        "How many sets?",
+        reply_markup=make_markup(sets_keyboard)
+    )
+    return SETS
+
+
+async def handle_sets(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle sets selection."""
+    query = update.callback_query
+    await query.answer()
+
+    total_sets = int(query.data)
+    context.chat_data['total_sets'] = total_sets
+    context.chat_data['current_set'] = 1
+    context.chat_data['reps'] = []
+    context.chat_data['weights'] = []
+
+    reps_keyboard = generate_number_keyboard(1, 20, columns=5)
+    await query.edit_message_text(
+        f"Set 1 of {total_sets}\n\n"
+        "How many reps?",
+        reply_markup=make_markup(reps_keyboard)
+    )
+    return REPS
+
+
+async def handle_reps(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle reps selection."""
+    query = update.callback_query
+    await query.answer()
+
+    append_to_chat_data_list(context, 'reps', query.data)
+
+    weight_keyboard = generate_number_keyboard(1, 50, columns=5, suffix=" kg")
+    await query.edit_message_text(
+        f"Set {context.chat_data['current_set']} - {query.data} reps\n\n"
+        "What weight (kg)?",
+        reply_markup=make_markup(weight_keyboard)
+    )
+    return WEIGHT
+
+
+async def handle_weight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle weight selection."""
+    query = update.callback_query
+    await query.answer()
+
+    append_to_chat_data_list(context, 'weights', query.data)
+
+    current_set = context.chat_data['current_set']
+    total_sets = context.chat_data['total_sets']
+
+    if current_set < total_sets:
+        # More sets to go
+        context.chat_data['current_set'] = current_set + 1
+
+        reps_keyboard = generate_number_keyboard(1, 20, columns=5)
+        await query.edit_message_text(
+            f"Set {current_set + 1} of {total_sets}\n\n"
+            "How many reps?",
+            reply_markup=make_markup(reps_keyboard)
+        )
+        return REPS
     else:
-        update.effective_message.reply_text(
-            "This function is yet to be handled.\n Use /gym again to enter recent logs.")  # TODO - handle this
-        return ConversationHandler.END
-    hourwise_keyboard = generate_hour_keyboard()
-    update.callback_query.edit_message_text("Hour of Gym exercise?",
-                                            reply_markup=InlineKeyboardMarkup(inline_keyboard=hourwise_keyboard))
-    return GYM_HOUR
+        # All sets done
+        await query.edit_message_text(
+            "Great workout!\n\n"
+            "Any notes? (or /skip)"
+        )
+        return NOTES
 
-def selected_gym_hour(update: Update, context):
-    logger.info("inside selected gym exercise hour")
+
+async def handle_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle notes input."""
+    context.chat_data['gym_notes'] = update.message.text.strip()
+    return await save_gym_record(update, context)
+
+
+async def skip_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Skip notes."""
+    context.chat_data['gym_notes'] = ""
+    return await save_gym_record(update, context)
+
+
+async def save_gym_record(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save gym record to database."""
+    chat_id = update.effective_chat.id
     chat_data = context.chat_data
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    hour_got = query.data.strip()
-    logger.info(f'Gym hour selected -> {hour_got}')
-    chat_data['gym_hour'] = hour_got
-    keyboard = generate_minute_keyboard(hour=hour_got)
-    update.callback_query.edit_message_text("Time of Gym exercise?",
-                                            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-    return GYM_MINUTE
 
-def selected_minute_for_gym(update: Update, context: CallbackContext):
-    logger.info("inside selected gym exercise minute")
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    chat_data = context.chat_data
-    date_selected = str(chat_data.get('gym_date'))
-    time_selected = query.data.strip()
-    chat_data['gym_time'] = time_selected
-    gym_datetime = datetime.strptime(date_selected + ' ' + time_selected, '%Y-%m-%d %H:%M')
-    chat_data['gym_datetime'] = gym_datetime
-    logger.info(f"Selected time for Gym Exercise -> {gym_datetime}")
-    gym_keyboard = generate_gym_names_keyboard()
-    update.callback_query.edit_message_text("Select type of Gym exercise",
-                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=gym_keyboard))
-    return GYM_NAME
-
-def selected_gymname(update, context):
-    logger.info('Inside selected gym type')
-    query: inlinequeryhandler = update.callback_query
-    chat_data = context.chat_data
-    update.callback_query.answer()
-    gym_name = query.data.strip()
-    chat_data['gym_name'] = gym_name
-    gym_type = str(chat_data.get('gym_name'))
-    chat_data['gym_type'] = gym_type
-    logger.info(f'Gym Exercise Type -> {gym_type}')
-    keyboard = generate_set_keyboard()
-    update.callback_query.edit_message_text("Enter Sets of Gym",
-                                            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-    return GYM_SET
-
-
-def gym_set(update, context):
-    logger.info("inside selected set count")
-    chat_data = context.chat_data
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    total_sets = query.data.strip()
-    logger.info(f'Set count -> {total_sets}')
-    chat_data['total_sets'] = total_sets
-    total_set = int(total_sets)
-    chat_data['total_set'] = total_set
-    if not chat_data.get('current_set'):
-        chat_data['current_set'] = 1
-    repetition_keyboard = generate_repetitions_keyboard()
-    update.callback_query.edit_message_text(f"How many repetition in set #{chat_data['current_set']}",
-                                                reply_markup=InlineKeyboardMarkup(inline_keyboard=repetition_keyboard))
-    return GYM_REPETITION
-
-
-def gym_repetition(update, context):
-    logger.info("inside selected repetition count")
-    chat_data = context.chat_data
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    repetition = query.data.strip()
-    logger.info(f'Repetition count -> {repetition}')
-    if not chat_data.get('repetition'):
-        chat_data['repetition'] = list()
-    chat_data['repetition'].append(repetition)
-    weight_keyborad = generate_weight_keyboard()
-    update.callback_query.edit_message_text(f"What weight for set #{chat_data['current_set']} in kgs",
-                                           reply_markup=InlineKeyboardMarkup(inline_keyboard=weight_keyborad))
-    return GYM_WEIGHT
-
-
-def gym_weight(update, context):
-    logger.info("inside selected weight count")
-    chat_data = context.chat_data
-    query: inlinequeryhandler = update.callback_query
-    update.callback_query.answer()
-    weight = query.data.strip()
-    logger.info(f'weight count -> {weight}')
-    if not chat_data.get('weight'):
-        chat_data['weight'] = list()
-    chat_data['weight'].append(weight)
-    if not chat_data.get('current_set'):
-        chat_data['current_set'] = 1
-    else:
-        chat_data['current_set'] += 1
-    if chat_data['current_set'] <= chat_data['total_set']:
-        repetition_keyboard = generate_repetitions_keyboard()
-        update.callback_query.edit_message_text(f"How many repetition in set #{chat_data['current_set']}",
-                                                reply_markup=InlineKeyboardMarkup(inline_keyboard=repetition_keyboard))
-        return GYM_REPETITION
-    else:
-        update.callback_query.edit_message_text("Write notes below (else click /skip_notes)")
-        return GYM_NOTE
-
-def gym_notes(update, context):
-    chat_data = context.chat_data
-    logger.info('enter gym note')
-    query_message_id = update.effective_message.message_id
-    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=query_message_id - 1)
-    ans = update.effective_message.text
-    chat_data['gym_notes'] = ans
-    update.message.reply_text("Notes added successfully.")
-    save_gym_record(update, context)
-    return ConversationHandler.END
-
-def skip_gym_notes(update, context):
-    chat_data = context.chat_data
-    query_message_id = update.effective_message.message_id
-    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=query_message_id - 1)
-    chat_data = context.chat_data
-    chat_data['gym_notes'] = ''
-    save_gym_record(update, context)
-    return ConversationHandler.END
-
-
-def cancelgym(update, context):
-    update.effective_message.reply_text('Gym command cancelled!')
-    clear_chatdata(context=context)
-    return ConversationHandler.END
-
-
-def save_gym_record(update, context):
-    logger.info('Inside Gym record')
-    chat_data = context.chat_data
     with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user: User = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            gym_datetime = chat_data['gym_datetime']
-            gym_type = chat_data['gym_type']
-            total_set = chat_data['total_set']
-            repetition = chat_data['repetition']
-            repetition = ", ".join(repetition)
-            weight = chat_data['weight']
-            weight = ", ".join(weight)
-            gym_notes = chat_data['gym_notes']
-            gym_record: Gym = Gym(user_id=user.id, gym_datetime=gym_datetime, gym_type=gym_type,
-                                     total_set=total_set, repetition=repetition, weight=weight, gym_notes=gym_notes, created_at=datetime.now())
-            try:
-                session.add(gym_record)
-            except:
-                session.rollback()
-                clear_chatdata(context=context)
-                logger.error(f"Error saving gym to database", exc_info=True)
-                update.effective_message.reply_text("Something wrong, please try /gym again..")
-            else:
-                session.commit()
-                logger.info(f"Gym record added - {gym_record}")
-                update.effective_message.reply_text(f"Record added - \n\n"
-                                                    f"<b>At:</b> {readable_datetime(gym_record.gym_datetime)}\n"
-                                                    f"<b>Type:</b> {gym_record.gym_type}\n"
-                                                    f"<b>Sets:</b> {gym_record.total_set}\n"
-                                                    f"<b>Reps:</b> {gym_record.repetition}\n"
-                                                    f"<b>Weight:</b> {gym_record.weight}\n"
-                                                    f"<b>Notes:</b>  {gym_record.gym_notes if gym_record.gym_notes else '-'}", parse_mode='HTML')
-                update.effective_message.reply_text(f"Use /mygym to check previous records")
-                try:
-                    message_id_of_letsstart = int(chat_data['message_id_of_letsstart'])
-                    context.bot.delete_message(chat_id=update.effective_message.chat_id, message_id=message_id_of_letsstart)
-                except:
-                    clear_chatdata(context=context)
-                    logger.exception("error converting chat_data['message_id_of_letsstart'] to int")
-            clear_chatdata(context=context)
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Error: User not found.")
+            clear_chat_data(context)
+            return ConversationHandler.END
 
-def get_reps_and_weights_in_format(reps, weights):
-    reps = reps.split(', ')
-    weights = weights.split(', ')
-    if isinstance(reps, list):
-        temp = ''
-        for rep, weight in zip(reps, weights):
-            temp += f"{weight}kg - {rep} reps\n"
-    else:
-        temp = f"{weights}kg - {reps} reps"
-    return temp
+        record = Gym(
+            user_id=user.id,
+            gym_datetime=chat_data.get('gym_datetime'),
+            gym_type=chat_data.get('gym_type'),
+            total_set=chat_data.get('total_sets'),
+            repetition=", ".join(chat_data.get('reps', [])),
+            weight=", ".join(chat_data.get('weights', [])),
+            gym_notes=chat_data.get('gym_notes', ''),
+            created_at=datetime.now()
+        )
 
-def mygym(update: Update, context):
-    with Session() as session:
-        chat_id = update.effective_message.chat_id
-        user = get_current_user(chat_id=chat_id, update=update, context=context, session=session)
-        if user:
-            if user.gyms.count():
-                for _id, item in enumerate(user.gyms.order_by(desc('gym_datetime')).all()):
-                    if _id < 5:
-                        rep_weight_string = get_reps_and_weights_in_format(item.repetition, item.weight)
-                        if not item.gym_notes:
-                            update.effective_message.reply_text(f"<b>{item.gym_type}</b> - {item.total_set} sets\n"
-                                                                f"{rep_weight_string}"
-                                                                f"{readable_datetime(item.gym_datetime)}\n\n", parse_mode='HTML')
-                        else:
-                            update.effective_message.reply_text(f"<b>{item.gym_type}</b> - {item.total_set} sets\n"
-                                                                f"{rep_weight_string}"
-                                                                f"Note - {item.gym_notes}\n"
-                                                                f"{readable_datetime(item.gym_datetime)}\n\n", parse_mode='HTML')
-            # update.effective_message.reply_text([(str(item.gym_datetime), item.gym_notes) for item in user.gym.all()])
-            else:
-                print('in here')
-                update.effective_message.reply_text("You haven't added a single Gym exercise record. Use /gym to get started")
+        try:
+            session.add(record)
+            session.commit()
 
+            logger.info(f"Gym record saved: {record}")
 
-def timeout_gym(update, context):
-    update.effective_message.reply_text(f'Gym command timedout! (timeout limit - {gym_timeout_time} sec')
+            await update.effective_message.reply_text(
+                f"Workout logged!\n\n"
+                f"<b>Time:</b> {readable_datetime(record.gym_datetime)}\n"
+                f"<b>Exercise:</b> {record.gym_type.replace('_', ' ').title()}\n"
+                f"<b>Sets:</b> {record.total_set}\n"
+                f"<b>Details:</b>\n{record.get_sets_formatted()}\n"
+                f"<b>Notes:</b> {record.gym_notes or '-'}",
+                parse_mode="HTML"
+            )
+            await update.effective_message.reply_text(
+                "Use /mygym to view your workout history."
+            )
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error saving gym record: {e}", exc_info=True)
+            await update.effective_message.reply_text(
+                "Error saving workout. Please try /gym again."
+            )
+        finally:
+            clear_chat_data(context)
+
     return ConversationHandler.END
 
 
-def readable_datetime(inputdatetime: datetime):
-    return inputdatetime.strftime('%d %b, %H:%M')
+async def my_gym(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show user's gym history."""
+    chat_id = update.effective_message.chat_id
+
+    with Session() as session:
+        user = User.get_user_by_chat_id(session, chat_id)
+        if not user:
+            await update.effective_message.reply_text("Please /register first.")
+            return
+
+        records = (
+            session.query(Gym)
+            .filter(Gym.user_id == user.id)
+            .order_by(desc(Gym.gym_datetime))
+            .limit(5)
+            .all()
+        )
+
+        if records:
+            for record in records:
+                text = (
+                    f"<b>{record.gym_type.replace('_', ' ').title()}</b> - "
+                    f"{record.total_set} sets\n"
+                    f"{record.get_sets_formatted()}\n"
+                    f"{readable_datetime(record.gym_datetime)}"
+                )
+                if record.gym_notes:
+                    text += f"\nNote: {record.gym_notes}"
+                await update.effective_message.reply_text(text, parse_mode="HTML")
+        else:
+            await update.effective_message.reply_text(
+                "No workout records yet. Use /gym to log your first one!"
+            )
 
 
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cancel gym logging."""
+    logger.info("Gym logging cancelled")
+    clear_chat_data(context)
+    await update.effective_message.reply_text("Workout logging cancelled.")
+    return ConversationHandler.END
+
+
+async def timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle conversation timeout."""
+    logger.info("Gym logging timed out")
+    clear_chat_data(context)
+    await update.effective_message.reply_text(
+        "Workout logging timed out. Please use /gym to try again."
+    )
+    return ConversationHandler.END
+
+
+# Build the conversation handler
 gym_handler = ConversationHandler(
     entry_points=[CommandHandler('gym', gym)],
     states={
-        GYM_DATE: [CallbackQueryHandler(selected_gym_date, pattern='^today|yday|daybeforeyday|other$')],
-        GYM_HOUR: [CallbackQueryHandler(selected_gym_hour, pattern=generate_pattern_for_gym_hour())],
-        GYM_MINUTE: [CallbackQueryHandler(selected_minute_for_gym, pattern=generate_pattern_for_gym_minute())],
-        GYM_NAME: [CallbackQueryHandler(selected_gymname, pattern=generate_pattern_for_gym_names())],
-        GYM_SET: [CallbackQueryHandler(gym_set, pattern=generate_pattern_for_set())],
-        GYM_REPETITION: [CallbackQueryHandler(gym_repetition, pattern=generate_pattern_for_repetitions())],
-        GYM_WEIGHT: [CallbackQueryHandler(gym_weight, pattern=generate_pattern_for_weights())],
-        GYM_NOTE: [CommandHandler('skip_notes', skip_gym_notes),
-                    MessageHandler(Filters.text, gym_notes)],
-        ConversationHandler.TIMEOUT: [MessageHandler(Filters.text and ~Filters.command, timeout_gym)]
+        DATE: [CallbackQueryHandler(handle_date, pattern=DATE_PATTERN)],
+        HOUR: [CallbackQueryHandler(handle_hour, pattern=HOUR_PATTERN)],
+        MINUTE: [CallbackQueryHandler(handle_minute, pattern=MINUTE_PATTERN)],
+        EXERCISE_TYPE: [CallbackQueryHandler(handle_exercise_type, pattern=GYM_TYPE_PATTERN)],
+        SETS: [CallbackQueryHandler(handle_sets, pattern=SETS_PATTERN)],
+        REPS: [CallbackQueryHandler(handle_reps, pattern=REPS_PATTERN)],
+        WEIGHT: [CallbackQueryHandler(handle_weight, pattern=WEIGHT_PATTERN)],
+        NOTES: [
+            CommandHandler('skip', skip_notes),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_notes)
+        ],
+        ConversationHandler.TIMEOUT: [MessageHandler(filters.ALL, timeout)]
     },
-    fallbacks=[CommandHandler('cancelgym', cancelgym)],
-    conversation_timeout=gym_timeout_time
+    fallbacks=[
+        CommandHandler('cancel', cancel),
+        CommandHandler('cancelgym', cancel),  # Backwards compatibility
+    ],
+    conversation_timeout=TIMEOUT_SECONDS
 )
+
+# Export for main.py
+mygym = my_gym

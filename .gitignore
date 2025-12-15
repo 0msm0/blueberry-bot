@@ -1,4 +1,5 @@
 userfoods/
+.claude/
 .idea
 __pycache__
 venv
