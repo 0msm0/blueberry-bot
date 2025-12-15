@@ -1,7 +1,7 @@
 """
 Database configuration and session management.
 
-Uses PostgreSQL for both development and production.
+Supports both PostgreSQL and SQLite based on DB_TYPE environment variable.
 """
 import os
 from contextlib import contextmanager
@@ -19,6 +19,12 @@ class DatabaseConfig:
     """Database configuration container."""
 
     def __init__(self):
+        # Database type: "postgres" or "sqlite"
+        self.db_type = os.environ.get("DB_TYPE", "sqlite").lower()
+
+        # SQLite configuration
+        self.sqlite_path = os.environ.get("SQLITE_PATH", "blueberry.db")
+
         # PostgreSQL configuration
         self.pg_host = os.environ.get("DB_HOST", "localhost")
         self.pg_user = os.environ.get("DB_USER", "postgres")
@@ -28,6 +34,11 @@ class DatabaseConfig:
 
         # Optional: Full database URL (overrides individual settings)
         self.database_url_override = os.environ.get("DATABASE_URL")
+
+    @property
+    def is_sqlite(self) -> bool:
+        """Check if using SQLite."""
+        return self.db_type == "sqlite"
 
     @property
     def database_url(self) -> str:
@@ -40,6 +51,9 @@ class DatabaseConfig:
                 url = url.replace("postgres://", "postgresql://", 1)
             return url
 
+        if self.is_sqlite:
+            return f"sqlite:///{self.sqlite_path}"
+
         return (
             f"postgresql://{self.pg_user}:{self.pg_password}"
             f"@{self.pg_host}:{self.pg_port}/{self.pg_database}"
@@ -48,9 +62,17 @@ class DatabaseConfig:
     @property
     def engine_kwargs(self) -> dict:
         """Get engine configuration."""
+        if self.is_sqlite:
+            # SQLite doesn't support connection pooling options
+            return {
+                "echo": os.environ.get("DB_ECHO", "").lower() == "true",
+                "connect_args": {"check_same_thread": False},
+            }
+
+        # PostgreSQL connection pool settings
         return {
             "pool_recycle": 300,
-            "pool_pre_ping": True,  # Verify connections before use
+            "pool_pre_ping": True,
             "pool_size": 5,
             "max_overflow": 10,
             "echo": os.environ.get("DB_ECHO", "").lower() == "true",
